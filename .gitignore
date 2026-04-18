@@ -1,0 +1,21 @@
+# 原始下载 (体积大, 版权敏感)
+data/*/raw/*.strings
+data/*/raw/*.stringsdict
+
+# 中间产物
+data/*/parsed/
+work/
+dist/
+
+# 保留目录结构
+!data/*/raw/.gitkeep
+!data/*/parsed/.gitkeep
+!work/.gitkeep
+!dist/.gitkeep
+
+# 系统
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.ace-tool/
