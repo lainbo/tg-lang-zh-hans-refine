@@ -36,7 +36,7 @@ def main(platform: str, translated_name: str) -> None:
 if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv:
-        raise SystemExit("usage: build_strings.py <ios|macos> [translated.json]")
+        raise SystemExit("usage: build_strings.py <ios|macos|tdesktop> [translated.json]")
     platform = argv[0]
     name = argv[1] if len(argv) > 1 else "translated.json"
     main(platform, name)

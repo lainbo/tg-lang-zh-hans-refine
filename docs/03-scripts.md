@@ -1,6 +1,6 @@
 # 03 · 脚本参考手册
 
-所有脚本都在 `scripts/`，零外部依赖，`python3 scripts/<name>.py` 直接跑。`<platform>` 参数为 `ios` 或 `macos`。
+所有脚本都在 `scripts/`，零外部依赖，`python3 scripts/<name>.py` 直接跑。`<platform>` 参数为 `ios`、`macos` 或 `tdesktop`。
 
 执行顺序（正常链路）：
 
@@ -23,15 +23,21 @@ flowchart LR
 
 **导出：**
 - `ROOT` — 项目根目录 `Path`
-- `PLATFORMS = ("ios", "macos")`
+- `PLATFORMS = ("ios", "macos", "tdesktop")`
 - `platform_dirs(platform)` — 返回 `{raw, parsed, work, dist}` 四个 `Path`
 - `parse_strings(text)` — `.strings` 文本 → `dict[str, str]`
 - `dump_strings(data)` — `dict[str, str]` → `.strings` 文本（按 key 字母序输出）
 
 **内部：**
 - `_STRING_RE` — Apple `.strings` 字符串正则
-- `_COMMENT_RE` / `_LINE_COMMENT_RE` — 注释剥离（`/* */` 和 `//`）
+- `_strip_comments(text)` — 仅剥离**字符串外部**的 `/* */` / `//` 注释
 - `_escape` / `_unescape` — 处理 `\"` `\\` `\n` `\t` `\r` `\'` 六种转义
+
+**注意：**
+- `TDesktop` 的 `.strings` 值里可能包含 `https://`、`**markdown**`、`[a href=\"...\"]`
+- 个别值里还可能出现字面量 `/* */`
+- 因此不能先用全局正则粗暴删注释，否则会误删字符串内容，直接导致 key 数偏少
+- 当前实现使用按字符扫描的 `_strip_comments()`，只在**字符串外部**识别注释
 
 ---
 

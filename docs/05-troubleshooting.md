@@ -122,6 +122,45 @@ python3 scripts/normalize.py ios
 
 ---
 
+## 上传后完成度明显偏低
+
+**现象**：本地看起来已经全量翻完，但上传到 translations.telegram.org 后，完成度明显低于预期。
+
+**先别怀疑 AI 漏翻**。优先排查是不是**解析阶段漏 key**。
+
+**推荐排查顺序：**
+1. 对比 `data/<p>/raw/en.strings` 的原始条目规模，与 `data/<p>/parsed/en.json` 的 key 数
+2. 对比 `work/<p>/merged.json` 与 `work/<p>/translated.json` 的 key 数
+3. 如果 `parsed/en.json` 就明显偏少，问题通常在 `parse_strings.py` / `_common.py`
+
+**对 TDesktop 尤其要查：**
+- 值里带 `https://` / `http://` 的 URL
+- 值里带 `**markdown**`
+- 值里带 `[a href=\"...\"]...[/a]`
+- 值里出现字面量 `/* */`
+
+**典型原因：**
+- 用全局正则删除 `//` 行注释，误伤 `https://`
+- 用全局正则删除 `/* */` 块注释，误伤字符串内部的字面量内容
+
+**正确做法：**
+- 只在**字符串外部**识别并剥离注释
+- 修完解析器后，重跑：
+
+```bash
+python3 scripts/parse_strings.py tdesktop
+python3 scripts/merge.py tdesktop
+python3 scripts/export_for_ai.py tdesktop --chunk 500
+```
+
+**如果旧翻译已经做了很多，不要推倒重来：**
+1. 备份旧的 `translated.json`
+2. 重新切分新版 `to-translate.partNN.json`
+3. 把旧 `translated.json` 作为 seed 灌回各片已有 key
+4. 只补新增出来的缺失 key
+
+---
+
 ## 喂 AI 的两种模式
 
 ### 模式 A：AI 有文件系统权限（另一个 Claude Code / Cursor / Cline）

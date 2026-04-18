@@ -118,7 +118,7 @@ if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv:
         raise SystemExit(
-            "usage: import_from_ai.py <ios|macos> [--part N] [translated-file.json]"
+            "usage: import_from_ai.py <ios|macos|tdesktop> [--part N] [translated-file.json]"
         )
     platform = argv[0]
     part: int | None = None

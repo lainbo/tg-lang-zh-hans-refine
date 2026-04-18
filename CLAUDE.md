@@ -52,7 +52,7 @@ tg-lang-refine/
 └── dist/<platform>/          最终 .strings (gitignore)
 ```
 
-`<platform>` ∈ {`ios`, `macos`}。
+`<platform>` ∈ {`ios`, `macos`, `tdesktop`}。
 
 ---
 

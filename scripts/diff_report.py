@@ -115,7 +115,7 @@ h2 {{ border-bottom: 2px solid #333; padding-bottom: 4px; }}
 if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv:
-        raise SystemExit("usage: diff_report.py <ios|macos> [translated.json]")
+        raise SystemExit("usage: diff_report.py <ios|macos|tdesktop> [translated.json]")
     platform = argv[0]
     name = argv[1] if len(argv) > 1 else "translated.json"
     main(platform, name)

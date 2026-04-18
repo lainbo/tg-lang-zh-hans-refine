@@ -29,5 +29,5 @@ def main(platform: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit("usage: parse_strings.py <ios|macos>")
+        raise SystemExit("usage: parse_strings.py <ios|macos|tdesktop>")
     main(sys.argv[1])

@@ -89,7 +89,7 @@ def main(platform: str, chunk: int | None) -> None:
 if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv:
-        raise SystemExit("usage: export_for_ai.py <ios|macos> [--chunk N]")
+        raise SystemExit("usage: export_for_ai.py <ios|macos|tdesktop> [--chunk N]")
     platform = argv[0]
     chunk = None
     if "--chunk" in argv:

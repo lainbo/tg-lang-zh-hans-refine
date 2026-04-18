@@ -101,7 +101,7 @@ python3 scripts/build_strings.py ios
 
 ## macOS 流程
 
-把 iOS 换成 macos 即可。Telegram macOS 独立字符串集, 需要单独跑一遍。
+把 iOS 换成 `macos` 或 `tdesktop` 即可。它们都是独立字符串集, 需要各自单独跑一遍。
 
 ## 设计原则
 

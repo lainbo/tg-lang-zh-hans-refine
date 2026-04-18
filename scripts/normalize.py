@@ -138,7 +138,7 @@ def main(platform: str, apply: bool) -> None:
 if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
-        raise SystemExit("usage: normalize.py <ios|macos> [--apply]")
+        raise SystemExit("usage: normalize.py <ios|macos|tdesktop> [--apply]")
     platform = argv[0]
     apply = "--apply" in argv
     main(platform, apply)

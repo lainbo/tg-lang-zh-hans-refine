@@ -4,7 +4,7 @@ import re
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PLATFORMS = ("ios", "macos")
+PLATFORMS = ("ios", "macos", "tdesktop")
 
 
 def platform_dirs(platform: str) -> dict[str, pathlib.Path]:
@@ -27,10 +27,6 @@ _STRING_RE = re.compile(
     r'"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;',
     re.MULTILINE,
 )
-_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
-_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
-
-
 def _unescape(s: str) -> str:
     out = []
     i = 0
@@ -56,11 +52,54 @@ def _escape(s: str) -> str:
     )
 
 
+def _strip_comments(text: str) -> str:
+    out: list[str] = []
+    i = 0
+    in_string = False
+    while i < len(text):
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < len(text) else ""
+
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and nxt:
+                out.append(nxt)
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+            continue
+
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch == "/" and nxt == "*":
+            i += 2
+            while i + 1 < len(text) and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2 if i + 1 < len(text) else 0
+            continue
+
+        if ch == "/" and nxt == "/":
+            i += 2
+            while i < len(text) and text[i] != "\n":
+                i += 1
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
 def parse_strings(text: str) -> dict[str, str]:
     """解析 .strings 文本为 key→value 字典。注释被丢弃。"""
-    # 先去掉注释, 避免注释里的伪字符串干扰
-    cleaned = _COMMENT_RE.sub("", text)
-    cleaned = _LINE_COMMENT_RE.sub("", cleaned)
+    # 只剥离字符串外部的注释, 避免误伤 https:// 或 markdown 中的 /* */
+    cleaned = _strip_comments(text)
     result: dict[str, str] = {}
     for m in _STRING_RE.finditer(cleaned):
         key = _unescape(m.group(1))

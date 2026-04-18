@@ -30,12 +30,19 @@
 
 ## macOS 平台
 
-同上三步, 地址里 `/ios/` 替换成 `/macos/`:
+macOS 同上三步, 地址里 `/ios/` 替换成 `/macos/`:
 - https://translations.telegram.org/en/macos/
 - https://translations.telegram.org/zh-hans/macos/
 - https://translations.telegram.org/zhcncc/macos/
 
 落地到 `data/macos/raw/`。
+
+TDesktop 同理, 地址替换成 `/tdesktop/`:
+- https://translations.telegram.org/en/tdesktop/
+- https://translations.telegram.org/zh-hans/tdesktop/
+- https://translations.telegram.org/zhcncc/tdesktop/
+
+落地到 `data/tdesktop/raw/`。
 
 ## 增加更多参考源 (可选)
 

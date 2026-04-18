@@ -141,6 +141,23 @@ python3 scripts/build_strings.py macos
 # Step 6: 上传到同一语言包的 macOS 平台页面
 ```
 
+TDesktop 也是**独立字符串集**，流程与 iOS 基本相同，不需要 `seed_ios_ref.py` 这类跨平台复用步骤，直接跑：
+
+```bash
+# Step 1: 下载 data/tdesktop/raw/ 三件套 (地址把 /ios/ 改成 /tdesktop/)
+python3 scripts/parse_strings.py tdesktop
+python3 scripts/merge.py tdesktop
+python3 scripts/export_for_ai.py tdesktop --chunk 500
+# Step 3: 用外部 AI / 子代理逐片翻译 translated.partNN.json
+python3 scripts/merge_parts.py tdesktop
+python3 scripts/normalize.py tdesktop              # dry-run, 看影响面
+python3 scripts/normalize.py tdesktop --apply      # 真改, 自动备份 .bak
+python3 scripts/import_from_ai.py tdesktop
+python3 scripts/diff_report.py tdesktop
+python3 scripts/build_strings.py tdesktop
+# Step 6: 上传到 translations.telegram.org 的 tdesktop 平台页面
+```
+
 ---
 
 ## 迭代维护
