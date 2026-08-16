@@ -1,13 +1,14 @@
 # tg-lang-refine
 
-Telegram 简体中文语言包精修工具链。以 **官方英文** 为基准，**官方简中 + 社区参考包（@zhcncc 等）** 为翻译记忆，交给外部翻译 AI 审校，本地打包后上传到 translations.telegram.org。
+Telegram 简体中文语言包精修工具链。以 **官方英文** 为基准，**官方简中 + 历史精修包 + 冻结社区参考包（@zhcncc 等）** 为翻译记忆，交给外部翻译 AI 审校，本地打包后上传到 translations.telegram.org。
 
 ## 底层逻辑
 
 ```
 官方英文 (baseline)
    ├── 官方简中 (机翻味重, 待改版)
-   └── @zhcncc 等社区包 (参考源)
+   ├── 当前精修包 (增量维护的主要参考源)
+   └── @zhcncc 等冻结社区包 (首次翻译参考源)
               ↓
        按 key 对齐合并 (merge.py)
               ↓
@@ -31,9 +32,10 @@ tg-lang-refine/
 │   │   ├── raw/          # 原始下载文件 (.strings)
 │   │   │   ├── en.strings           ← 官方英文 baseline
 │   │   │   ├── official-zh.strings  ← 官方简中 (机翻版)
-│   │   │   └── zhcncc.strings       ← @zhcncc 社区参考包
+│   │   │   ├── ref-current-refined.strings ← 当前精修包, 增量维护参考
+│   │   │   └── zhcncc.strings       ← @zhcncc 冻结历史参考包
 │   │   └── parsed/       # 解析后的 JSON (scripts 产出)
-│   └── macos/            # 同构, 处理 macOS 包
+│   └── macos/            # 历史产物, 已停止维护
 ├── work/
 │   ├── ios/
 │   │   ├── merged.json       ← 多源对齐
@@ -51,10 +53,15 @@ tg-lang-refine/
 ## 使用流程 (iOS)
 
 ### 1. 下载源文件
-详见 `docs/SOURCES.md`。把三个 .strings 文件放到 `data/ios/raw/`:
+详见 `docs/SOURCES.md`。增量维护时把两个官方 .strings 文件放到 `data/ios/raw/`:
 - `en.strings` (官方英文)
 - `official-zh.strings` (官方新出的简中, 你要替换掉的那版)
-- `zhcncc.strings` (参考包, @zhcncc)
+
+`zhcncc.strings` 只作为首次翻译时留下的冻结参考源，后续不再要求下载新版。每次增量前先把当前精修包保存成参考源：
+
+```bash
+cp dist/ios/zh-Hans-custom.strings data/ios/raw/ref-current-refined.strings
+```
 
 ### 2. 解析成 JSON
 ```bash
@@ -65,7 +72,7 @@ python3 scripts/parse_strings.py ios
 ```bash
 python3 scripts/merge.py ios
 ```
-产出 `work/ios/merged.json`, 每个 key 带 `{en, official_zh, refs: {zhcncc: "..."}}`。
+产出 `work/ios/merged.json`, 每个 key 带 `{en, official_zh, refs: {"current-refined": "...", "zhcncc": "..."}}`。
 
 ### 4. 导出给翻译 AI
 ```bash
@@ -81,7 +88,7 @@ python3 scripts/export_for_ai.py ios
 {
   "lng_chat_typing": {
     "final": "对方正在输入…",
-    "source": "zhcncc",         // 采用/改写/重写, 便于审核
+    "source": "rewrite_ref",    // 采用/改写/重写, 便于审核
     "note": ""                  // 可选, 改写原因
   }
 }
@@ -99,9 +106,11 @@ python3 scripts/build_strings.py ios
 ```
 产出 `dist/ios/zh-Hans-custom.strings`, 上传到你自己的 Telegram 自定义语言包。
 
-## macOS 流程
+## 平台维护状态
 
-把 iOS 换成 `macos` 或 `tdesktop` 即可。它们都是独立字符串集, 需要各自单独跑一遍。
+- iOS：继续维护。
+- TDesktop：继续维护，和 iOS 是独立字符串集，需要单独跑。
+- macOS：停止维护，保留历史产物，不再下载和上传。
 
 ## 设计原则
 

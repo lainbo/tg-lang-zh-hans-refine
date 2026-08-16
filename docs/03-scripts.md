@@ -82,12 +82,14 @@ python3 scripts/merge.py ios
 
 ## `seed_ios_ref.py`
 
+> 历史脚本：macOS 已停止维护。除非明确恢复 macOS 维护，否则不要在当前更新流程中使用。
+
 **作用**：把已完成的 iOS 精修译文按**英文原文**反查后注入为 macOS 的参考源，避免重复翻译跨平台相同文案。
 
 **用法**：
 ```bash
 # 前置: iOS 已跑完全流程 (work/ios/translated.json 就位)
-#       macOS 三件套已 parse (data/macos/parsed/en.json 就位)
+#       macOS 历史源文件已 parse (data/macos/parsed/en.json 就位)
 python3 scripts/seed_ios_ref.py
 python3 scripts/parse_strings.py macos   # 重跑以识别新 ref
 ```

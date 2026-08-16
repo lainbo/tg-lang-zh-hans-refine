@@ -8,7 +8,13 @@ Telegram 简体中文语言包精修工具链。本文档是 AI agent 维护本�
 
 ## 一句话定位
 
-以官方英文为 baseline，把官方简中 + 社区包（@zhcncc 等）作为翻译记忆（TM），交给**外部翻译 AI** 做审校，本地打包成 `.strings` 后手动上传 translations.telegram.org 成为**自定义语言包**。本项目**只做数据搬运和审核辅助，不做翻译**。
+以官方英文为 baseline，把官方简中 + 当前精修包 + 冻结社区包（@zhcncc 等）作为翻译记忆（TM），交给**外部翻译 AI** 做审校，本地打包成 `.strings` 后手动上传 translations.telegram.org 成为**自定义语言包**。本项目**只做数据搬运和审核辅助，不做翻译**。
+
+当前维护范围：
+- iOS：继续维护。增量更新只需要重新下载官方英文 `en.strings` 和官方简中 `official-zh.strings`。
+- TDesktop：继续维护，和 iOS 独立处理。
+- macOS：停止维护，仅保留历史产物。
+- `zhcncc.strings`：冻结历史参考源；后续新增文案不会覆盖它，不再要求下载新版。
 
 ---
 
@@ -22,7 +28,7 @@ tg-lang-refine/
 ├── .gitignore
 ├── docs/                     渐进式披露文档
 │   ├── 01-architecture.md    架构与设计原则
-│   ├── 02-workflow.md        完整操作流程 (iOS/macOS)
+│   ├── 02-workflow.md        完整操作流程 (iOS/TDesktop)
 │   ├── 03-scripts.md         脚本参考手册
 │   ├── 04-data-format.md     中间产物格式定义
 │   ├── 05-troubleshooting.md 踩坑、白名单、已知限制
@@ -31,7 +37,7 @@ tg-lang-refine/
 │   ├── _common.py               .strings 解析/序列化 + 路径约定
 │   ├── parse_strings.py         .strings → JSON
 │   ├── merge.py                 三源按 key 对齐 → merged.json
-│   ├── seed_ios_ref.py          iOS 精修 → macOS 参考源 (跨平台 TM 复用)
+│   ├── seed_ios_ref.py          历史 macOS 复用脚本 (macOS 已停止维护)
 │   ├── export_for_ai.py         merged.json → 翻译 AI 输入 (分片)
 │   ├── import_from_ai.py        校验 AI 回传 (全量 / 单片)
 │   ├── merge_parts.py           30 分片 → translated.json
@@ -65,7 +71,7 @@ tg-lang-refine/
 | 查某个脚本参数 | `docs/03-scripts.md` |
 | 搞懂 merged.json / translated.json 字段 | `docs/04-data-format.md` |
 | 排查上传失败、占位符错位、54 条白名单等 | `docs/05-troubleshooting.md` |
-| 下载 en / official-zh / zhcncc 三件套 | `docs/SOURCES.md` |
+| 下载当前维护源文件 | `docs/SOURCES.md` |
 | 用户视角的总览 | `README.md` |
 
 ---

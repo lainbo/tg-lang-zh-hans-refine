@@ -1,6 +1,6 @@
 # 02 · 完整操作流程
 
-从 0 到上线的一条命令链，以 **iOS** 为主线。macOS 在末尾给 delta。
+从 0 到上线的一条命令链，以 **iOS** 为主线。TDesktop 是独立平台，命令同构；macOS 已停止维护，仅保留历史产物。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ---
 
-## Step 1 · 下载三件套
+## Step 1 · 下载源文件
 
 详见 `docs/SOURCES.md`。把以下文件放到 `data/ios/raw/`：
 
@@ -18,7 +18,14 @@
 |---|---|
 | `en.strings` | https://translations.telegram.org/en/ios/ → Export |
 | `official-zh.strings` | https://translations.telegram.org/zh-hans/ios/ → Export |
-| `zhcncc.strings` | https://translations.telegram.org/zhcncc/ios/ → Export（可能要先 fork） |
+
+`zhcncc.strings` 是冻结历史参考源，只在首次翻译时下载；后续 Telegram 新增文案它不会更新，增量维护时不要把它列为必下文件。
+
+每次增量维护前，把当前精修包保存为主要参考源：
+
+```bash
+cp dist/ios/zh-Hans-custom.strings data/ios/raw/ref-current-refined.strings
+```
 
 > 可选：更多参考源命名为 `ref-<name>.strings` 放入同目录，`merge.py` 自动识别。
 
@@ -117,34 +124,14 @@ python3 scripts/build_strings.py ios          # 最终 .strings
 
 ---
 
-## macOS 流程 Delta
+## macOS 维护状态
 
-Telegram macOS 是**独立字符串集**，要单独跑一遍，把上面所有命令的 `ios` 替换为 `macos`：
+macOS 已停止维护。不要再下载 macOS 源文件，也不要继续跑 macOS 打包上传流程；现有 `data/macos/`、`work/macos/`、`dist/macos/` 只作为历史记录保留。
 
-```bash
-# Step 1: 下载 data/macos/raw/ 三件套 (地址把 /ios/ 改成 /macos/)
-python3 scripts/parse_strings.py macos
-
-# Step 1.5 (推荐): 把 iOS 精修结果注入为 macOS 额外参考源
-# 以英文原文为对齐维度, 实测能预填 ~49% (iOS 14923 条 → macOS 命中 4731 条)
-python3 scripts/seed_ios_ref.py
-python3 scripts/parse_strings.py macos     # 重跑以识别新生成的 ref-ios-refined
-
-python3 scripts/merge.py macos             # 输出会多一行 "ios-refined 覆盖: N/M"
-python3 scripts/export_for_ai.py macos --chunk 500
-# Step 3-5: 同 iOS (AI 看到 refs.ios-refined 会大量 adopt)
-python3 scripts/merge_parts.py macos
-python3 scripts/normalize.py macos --apply
-python3 scripts/import_from_ai.py macos
-python3 scripts/diff_report.py macos
-python3 scripts/build_strings.py macos
-# Step 6: 上传到同一语言包的 macOS 平台页面
-```
-
-TDesktop 也是**独立字符串集**，流程与 iOS 基本相同，不需要 `seed_ios_ref.py` 这类跨平台复用步骤，直接跑：
+TDesktop 也是**独立字符串集**，流程与 iOS 基本相同，不需要 `seed_ios_ref.py` 这类跨平台复用步骤。增量维护只下载官方英文和官方简中，历史 `zhcncc.strings` 仅作为冻结参考源：
 
 ```bash
-# Step 1: 下载 data/tdesktop/raw/ 三件套 (地址把 /ios/ 改成 /tdesktop/)
+# Step 1: 下载 data/tdesktop/raw/en.strings 和 official-zh.strings
 python3 scripts/parse_strings.py tdesktop
 python3 scripts/merge.py tdesktop
 python3 scripts/export_for_ai.py tdesktop --chunk 500

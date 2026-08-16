@@ -7,9 +7,10 @@
 **破局思路**：引入**翻译记忆（Translation Memory）**。
 - 官方英文 = 权威 baseline
 - 官方简中 = 机翻版，作为反面教材
-- 社区包（@zhcncc 等） = 人工精品，作为正面参考
+- 当前精修包 = 增量维护的主要参考源
+- 社区包（@zhcncc 等） = 冻结历史参考源，只覆盖首次翻译时期的文案
 
-三源对齐后让 AI **做裁判**而不是**做译者**：
+多源对齐后让 AI **做裁判**而不是**做译者**：
 - 三份候选一致且地道 → 直接采用
 - 候选分歧 → 挑最好的或综合改写
 - 全员机翻 → 重新翻译
@@ -24,10 +25,12 @@
 flowchart TD
     TG[translations.telegram.org<br/>手动下载] --> EN[en.strings]
     TG --> OFFZH[official-zh.strings]
-    TG --> ZHCNCC[zhcncc.strings]
+    CUR[dist/&lt;p&gt;/zh-Hans-custom.strings<br/>当前精修包] --> REFCUR[ref-current-refined.strings]
+    ZHCNCC[zhcncc.strings<br/>冻结历史参考源]
 
     EN --> PARSE[parse_strings.py]
     OFFZH --> PARSE
+    REFCUR --> PARSE
     ZHCNCC --> PARSE
     PARSE --> PARSED[(data/&lt;p&gt;/parsed/*.json)]
 
@@ -60,7 +63,7 @@ flowchart TD
     classDef artifact fill:#e8f4f8,stroke:#2c7da0,stroke-width:1px
     classDef script fill:#fdf6e3,stroke:#b58900,stroke-width:1px
     classDef external fill:#fce4ec,stroke:#c2185b,stroke-width:1px
-    class EN,OFFZH,ZHCNCC,PARSED,MERGED,PARTS,TRANS,TRANSLATED,VALIDATION,HTML,DIST artifact
+    class EN,OFFZH,CUR,REFCUR,ZHCNCC,PARSED,MERGED,PARTS,TRANS,TRANSLATED,VALIDATION,HTML,DIST artifact
     class PARSE,MERGE,EXPORT,MERGEP,NORMALIZE,VALIDATE,REPORT,BUILD script
     class TG,UPLOAD,USER external
 ```
