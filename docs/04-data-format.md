@@ -57,20 +57,12 @@
 ```json
 {
   "<key>": {
-    "en": "<英文原文, 必有>",
-    "official_zh": "<官方简中, 可选>",
-    "refs": {
-      "zhcncc": "<社区参考, 可选>",
-      "<other>": "<其他 ref-*, 可选>"
-    }
+    "en": "当前英文原文"
   }
 }
 ```
 
-**字段约束：**
-- `en` 必存在（baseline）
-- `official_zh` 和 `refs` 缺失表示源未覆盖该 key
-- `refs` 空或全部缺失时本字段会整个省略
+`en` 是唯一必需字段。当前生成的基准只包含英文；历史归档中可能保留 `official_zh` 和 `refs`，用于追溯当时的数据。
 
 ---
 
@@ -79,7 +71,7 @@
 **产自**：`export_for_ai.py`
 **位置**：`work/<p>/`
 
-结构与 `merged.json` 完全一致，是同一份数据的复制（或分片）。分片按 key 字母序切，片间无重叠。
+首次全量导出时与 `merged.json` 相同；增量更新时只包含待审校子集。只含 `en`，英文变化时额外带 `previous_en`（旧英文）。参考译文不进入输入；本项目旧精修译文单独放在 `translation-memory.json`。分片按 key 字母序切，片间无重叠。
 
 **分片命名**：`part01` ~ `partNN`（零填充 2 位），`NN = ceil(total / chunk)`。
 
@@ -90,7 +82,7 @@
 **产自**：`export_for_ai.py`
 **位置**：`work/<p>/`
 
-翻译 AI 任务合约。**内容是脚本硬编码的 `PROMPT_TEMPLATE`**，改动须同步到 `export_for_ai.py`。
+翻译 AI 任务合约。由 `export_for_ai.py` 的 `PROMPT_TEMPLATE` 与 `docs/06-translation-style.md` 合成；术语只在该规范文件维护。
 
 核心约定：
 - AI 输出必须是**纯 JSON**，不用 markdown code fence 包裹
@@ -102,7 +94,7 @@
 
 ## `translated.json` / `translated.partNN.json`
 
-**产自**：AI 回传（单片）→ `merge_parts.py`（合并）
+**产自**：AI 回传（单片）与原文未变的复用译文 → `merge_parts.py`（合并）；合并后规范化与人工修订以 `translated.json` 为主。
 **位置**：`work/<p>/`
 
 ```json
@@ -116,21 +108,23 @@
 ```
 
 **`source` 字段语义**：
-| 值 | 含义 | 审核优先级 |
+| 值 | 含义 | 审核要求 |
 |---|---|---|
-| `adopt` | 直接采用某个参考源（note 里写 `adopt:<ref_name>`） | 低（扫一眼） |
-| `rewrite_ref` | 基于参考源微调（note 写原因） | 中 |
-| `rewrite_official` | 基于官方简中改写（通常是修机翻味） | 高 |
-| `fresh` | 全部候选都不可用，重新翻译 | 最高 |
+| `adopt` | 原样采用经核实的已有译文（note 写明来源，如 `adopt:translation-memory`） | 对照当前英文复核 |
+| `rewrite_ref` | 实际基于精修记忆或按需查阅的社区译文改写（note 写来源与理由） | 复核完整语义与上下文 |
+| `rewrite_official` | 实际基于按需查阅的官方简中改写（note 写理由） | 复核完整语义与上下文 |
+| `fresh` | 以英文和上下文独立翻译，日常默认使用 | 复核完整语义及上下文 |
 
-**必需字段**：`final` 非空字符串、`source` 取值合法。
+`source` 只记录实际来源，不代表质量高低。历史条目的来源和备注保留原意。
+
+**必需字段**：`final` 非空字符串、`source` 取值合法；`note` 存在时须为字符串。
 
 ---
 
 ## `validation.json`
 
 **产自**：`import_from_ai.py`
-**位置**：`work/<p>/`
+**位置**：`work/<p>/`，单片校验使用 `validation.partNN.json`，全量使用 `validation.json`。
 
 ```json
 {
@@ -151,6 +145,9 @@
 ```
 
 **`issue` 类型**：
+- `top_level_not_object` — 回传顶层不是 object
+- `invalid_note` — note 非字符串
+- `placeholder_order_mismatch` — 无编号百分号参数顺序变化
 - `missing_in_translated` — baseline 有但 AI 回传里没有
 - `extra_key_not_in_merged` — AI 回传多出来的 key
 - `not_object` — entry 不是 object
@@ -158,7 +155,7 @@
 - `invalid_source:<value>` — source 取值不在白名单
 - `placeholder_mismatch` — 占位符与英文不一致（含 `en_placeholders` / `zh_placeholders` diff 字段）
 
-**通过条件**：`problem_count == 0`。
+**通过条件**：`problem_count == 0`；失败以状态码 1 退出。占位符比较保留重复次数，包含 `%%`。
 
 ---
 
@@ -175,12 +172,12 @@ Markdown 格式的 diff 报告。结构：
   - `您→你`: 902 次
   - `...→…`: 47 次
 
-## 各分片修改数
-- translated.part01.json: 25 条
+## 文件修改数
+- translated.json: 25 条
 ...
 
 ## 全部修改条目 (diff)
-### `<key>`  (translated.partNN.json, 您→你×2)
+### `<key>`  (translated.json, 您→你×2)
 ```diff
 - 您已限制 Telegram 对您所有照片的访问权限。
 + 你已限制 Telegram 对你所有照片的访问权限。
@@ -194,11 +191,9 @@ Markdown 格式的 diff 报告。结构：
 **产自**：`diff_report.py`
 **位置**：`work/<p>/`
 
-HTML 审核报告。按 source 分组，每组一个 `<table>`。列顺序：
+默认全量报告；`--update` 输出 `update-report.html`，范围为 `to-translate.json`。按尚无译文、新增、英文变化、既有审校和其他条目分组，每组一个表格，空组省略。
 
-| key | en | official_zh | refs.<各个> | final | source | note |
-
-**样式**：source 分组间用颜色区分（red/orange/yellow/green），表头 sticky。
+列顺序：key、当前英文、旧英文（变化时）、上一轮精修译文、最终译文、来源记录、审校备注。历史对照来自 `translation-memory.json`，变更类型来自 `update.json`，旧英文相同时该格留空。参考包不作为默认对照列，来源标签不决定颜色或审核优先级。
 
 ---
 
@@ -214,12 +209,60 @@ HTML 审核报告。按 source 分组，每组一个 `<table>`。列顺序：
 ## `.bak` 备份
 
 **产自**：`normalize.py --apply`
-**命名**：`translated.partNN.json.bak`
+**命名**：`translated.json.bak`
 
 仅在 normalize 首次 apply 时创建（后续 apply 不覆盖已有 `.bak`），内容是 normalize 前的原文。
 
 **回滚**：
 ```bash
-for f in work/ios/translated.part*.json.bak; do mv "$f" "${f%.bak}"; done
-python3 scripts/merge_parts.py ios
+cp work/ios/translated.json.bak work/ios/translated.json
+python3 scripts/import_from_ai.py ios
+python3 scripts/build_strings.py ios
 ```
+
+
+## `update.json` 与历史归档
+
+由 `prepare_update.py` 生成：
+
+```json
+{
+  "platform": "ios",
+  "created_at": "2026-09-28T15:00:00+08:00",
+  "archive": "history/<时间>",
+  "sources": {
+    "en": {"filename": "ios_en_VERSION.strings", "sha256": "<SHA-256>"}
+  },
+  "previous_total": 100,
+  "total": 103,
+  "added": ["new.key"],
+  "changed": ["changed.key"],
+  "removed": [],
+  "reused_count": 98,
+  "reviewed_existing": []
+}
+```
+
+`added`、`changed`、`removed` 是 key 列表；示例数量仅展示字段。`archive` 相对当前平台 work 目录，内含旧 `raw/`、`parsed/`、`work/` 与 `dist/`。`reviewed_existing` 为可选字段，记录本轮额外审校的既有 key（如术语修订）；相应条目须从复用集合移入待审校集合，更新 `reused_count`。
+
+`translated.reused.json` 与 `translated.json` 使用相同条目结构，只包含未进入本轮审校的译文。其 key 与审校 key 不得重叠，二者并集必须覆盖当前 `merged.json`。
+
+
+## `translation-memory.json`
+
+由 `prepare_update.py` 从上一轮英文基准和精修主文件生成，与默认待译输入分开：
+
+```json
+{
+  "<key>": {
+    "en": "上一轮英文",
+    "final": "对应的上一轮精修译文"
+  }
+}
+```
+
+保存上一轮全部 key，包括本轮已删除的条目，供按需检索历史表达。它不参与合并和打包。原文未变的实际复用对象是 `translated.reused.json`；初译后可查此记忆核对术语和表达。
+
+## `review.md`
+
+由实际审校者填写，记录本轮语义与一致性复核范围、发现的问题及处理、术语例外、歧义查证依据和未决项。它是人工审校记录，脚本不根据文件存在与否认定语义通过，也不自动生成“审校通过”结论。

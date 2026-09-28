@@ -41,6 +41,22 @@ flowchart LR
 
 ---
 
+## `prepare_update.py`
+
+日常增量入口；只用于已有完整译文的 iOS 与 TDesktop。
+
+```bash
+python3 scripts/prepare_update.py ios --en /path/to/ios_en.strings [--chunk 100]
+```
+
+先校验上一轮 `merged.json` 与 `translated.json`，读取并检查新下载；归档旧 raw、parsed、dist 与 work 文件，再安装新英文；从上一轮主文件保存成对的英文与精修译文。
+
+输出 `update.json`、全量 `merged.json`、`translated.reused.json`、`translation-memory.json`、增量 `to-translate.json` 和分片、`PROMPT.md`。只有英文完全未变的 key 会复用；英文改变和新增 key 进入审校；删除 key 不进入最终包。无变化时输出空审校集，仍可合并和打包。
+
+参数 `--chunk` 必须为正整数。来源文件名与 SHA-256 写入 `update.json`，历史保存在 `work/<p>/history/<时间>/`。旧英文与译文缺失或不匹配、新源为空、误下载其他平台时停止。
+
+---
+
 ## `parse_strings.py`
 
 **作用**：扫 `data/<p>/raw/*.strings` → `data/<p>/parsed/<stem>.json`
@@ -59,71 +75,41 @@ python3 scripts/parse_strings.py ios
 
 ## `merge.py`
 
-**作用**：以 `en.json` 为 key 全集，对齐 `official-zh.json` + 所有 `zhcncc.json` / `ref-*.json` 参考源，输出 `work/<p>/merged.json`。
+**作用**：从 `data/<p>/parsed/en.json` 建立全量英文基准，输出 `work/<p>/merged.json`。参考文件保留在 parsed 中供按需查阅，默认基准仅含 `en`。
 
 **用法**：
 ```bash
 python3 scripts/merge.py ios
 ```
 
-**识别规则**（文件名 → 语义）：
-| 文件 | 角色 |
-|---|---|
-| `en.json` | baseline（必需） |
-| `official-zh.json` | 官方简中（可选，通常存在） |
-| `zhcncc.json` | 社区参考包（可选） |
-| `ref-<name>.json` | 任意额外参考源，名字去掉 `ref-` 前缀作为 refs key |
-
-**输出结构**：见 `docs/04-data-format.md#merged.json`
-
-**统计打印**：每个参考源的 key 覆盖率。
+**输出结构**：见 `docs/04-data-format.md`。打印当前英文 key 数。
 
 ---
 
 ## `seed_ios_ref.py`
 
-> 历史脚本：macOS 已停止维护。除非明确恢复 macOS 维护，否则不要在当前更新流程中使用。
-
-**作用**：把已完成的 iOS 精修译文按**英文原文**反查后注入为 macOS 的参考源，避免重复翻译跨平台相同文案。
-
-**用法**：
-```bash
-# 前置: iOS 已跑完全流程 (work/ios/translated.json 就位)
-#       macOS 历史源文件已 parse (data/macos/parsed/en.json 就位)
-python3 scripts/seed_ios_ref.py
-python3 scripts/parse_strings.py macos   # 重跑以识别新 ref
-```
-
-**原理**：
-- 用 `data/ios/parsed/en.json` + `work/ios/translated.json` 建 TM: `{en_text: final}`
-- 用 `data/macos/parsed/en.json` 逐 key 反查 TM
-- 命中的输出到 `data/macos/raw/ref-ios-refined.strings` (标准 .strings 格式)
-- 不会污染 iOS 数据；macOS 只是多了一个叫 `ios-refined` 的参考源
-
-**为什么对齐维度是英文而不是 key**：iOS 和 macOS 是独立 key 空间 (key 同名重叠仅 ~11%)，但同产品英文文案大量重叠 (~49%)。按 key 对齐会漏掉绝大多数可复用译文。
-
-**输出**：`data/macos/raw/ref-ios-refined.strings`
-
-**下一步**：跑 `merge.py macos`，`refs.ios-refined` 自动纳入；AI 看到这一列后大概率 `adopt:ios-refined`，省一大半翻译工作量。
+历史 macOS 脚本，保留供历史数据追溯。它按英文匹配 iOS 精修译文，生成 `data/macos/raw/ref-ios-refined.strings`。macOS 已停止维护，当前维护流程不使用该脚本。
 
 ---
 
 ## `export_for_ai.py`
 
-**作用**：把 `merged.json` 复制一份为 `to-translate.json`，可选切分为 `part01..partNN`，并写出 `PROMPT.md`。
+**作用**：首次全量导出 `merged.json`；增量流程由 `prepare_update.py` 调用，导出本轮审校子集。可选切分为 `part01..partNN`，并将 `PROMPT_TEMPLATE` 与共用审校规范合成为 `PROMPT.md`。
 
 **用法**：
 ```bash
 python3 scripts/export_for_ai.py ios              # 单文件
-python3 scripts/export_for_ai.py ios --chunk 500  # 切片 (推荐)
+python3 scripts/export_for_ai.py ios --chunk 100  # 切片 (推荐)
 ```
 
 **输出**：
-- `work/<p>/to-translate.json` — 全量
+- `work/<p>/to-translate.json` — 本次待审校输入
 - `work/<p>/to-translate.partNN.json` — 分片（加 `--chunk` 才有）
 - `work/<p>/PROMPT.md` — 翻译 AI 任务合约（详见 `PROMPT_TEMPLATE`）
 
-**设计**：分片按 key 字母序切，保证分片间 key 不重叠、合并时无冲突。
+**设计**：导出仅保留 `en` 与存在时的 `previous_en`；即使旧基准中含有参考列，也不带入默认输入。分片按 key 字母序切，保证分片间 key 不重叠、合并时无冲突。同功能文案仍需跨片核对。
+
+已有 `translated.part*.json` 时拒绝重新导出，防止输入与已译分片错配。
 
 **注意**：`PROMPT.md` 内容是所有翻译 AI 必须遵守的合约，改动须同步 `import_from_ai.py:VALID_SOURCES` 和占位符正则。
 
@@ -142,9 +128,9 @@ python3 scripts/import_from_ai.py ios --part 1 custom.json     # 指定回传文
 
 **校验项**：
 1. **结构**：顶层为 object，每个 entry 是 `{final: str, source: str, note?: str}`
-2. **source 合法性**：四选一 `adopt / rewrite_ref / rewrite_official / fresh`
-3. **final 非空**
-4. **占位符一致性**：`final` 与 `en` 的占位符集合必须相等（`_PLACEHOLDER_RE`）
+2. **source 合法性**：四选一 `adopt / rewrite_ref / rewrite_official / fresh`，仅记录实际来源；英文独立翻译默认 `fresh`
+3. **final 非空字符串**（语言包中用于分隔或省略连接词的空白串可以保留）
+4. **占位符一致性**：数量、类型和写法必须相同，`%%` 也保留；无编号百分号参数必须保持顺序，带编号参数可调整顺序。
 5. **key 覆盖**：缺失 / 多余都报告
 
 **占位符正则** `_PLACEHOLDER_RE`：
@@ -152,33 +138,31 @@ python3 scripts/import_from_ai.py ios --part 1 custom.json     # 指定回传文
 - `%d` / `%1$d` — 整数
 - `%s` / `%1$s` — C string
 - `%.2f` / `%1$.2f` — 浮点
+- `%.2d` — 格式化整数
+- `%%` — 字面量百分号
 - `{xxx}` — Telegram 自定义占位符（如 `{user}`）
 
-**错误**：`validation.json` 列出具体 key + issue 类型 + 占位符 diff；同时打印问题数摘要。
+**错误**：全量输出 `validation.json`，单片输出 `validation.partNN.json`；问题数大于 0 时以状态码 1 退出。`note` 存在时必须为字符串。共享函数 `validate()` 也用于合并和打包门禁。
 
 ---
 
 ## `merge_parts.py`
 
-**作用**：把 `translated.part*.json` 合并为 `translated.json`，检测重复 key 和覆盖率。
+**作用**：按 `to-translate.part*.json` 确定本轮应有分片，合并对应译文与 `translated.reused.json`（存在时）。
 
-**用法**：
 ```bash
 python3 scripts/merge_parts.py ios
 ```
 
-**检查**：
-- 分片间是否有 key 重复（理论上不该有，因为 export 按字母序切）
-- 与 `merged.json` 的全集对比，报告 missing / extra
-- 合并顺序：按文件名字母序，后者覆盖前者（有重复时）
+缺片、多余片、重复 key、任一片校验失败或合并后全量校验失败，均以非零状态退出并保留已有主文件。通过后输出 `translated.json`；若已有主文件，先复制到 `.bak`。首次全量审校不需要 `translated.reused.json`。
 
-**输出**：`work/<p>/translated.json`（按 key 字母序）
+合并后只修改主文件；旧分片留作审校记录，重新合并会覆盖主文件上的后续编辑。
 
 ---
 
 ## `normalize.py`
 
-**作用**：对 `translated.part*.json` 的 `final` 字段应用全局风格规则。
+**作用**：对合并后的 `translated.json` 的 `final` 字段应用全局风格规则。
 
 **用法**：
 ```bash
@@ -193,12 +177,12 @@ python3 scripts/normalize.py ios --apply      # 真改, 自动创建 .bak
 
 **输出**：
 - `work/<p>/normalize-report.md` — Markdown diff 报告（全量 diff）
-- `--apply` 时会在每个被改动的 `translated.partNN.json` 同目录创建 `.json.bak`（首次）
+- `--apply` 时会在被改动的 `translated.json` 同目录创建 `.json.bak`（首次）
 
 **回滚**：
 ```bash
-for f in work/ios/translated.part*.json.bak; do mv "$f" "${f%.bak}"; done
-python3 scripts/merge_parts.py ios
+cp work/ios/translated.json.bak work/ios/translated.json
+python3 scripts/import_from_ai.py ios
 ```
 
 **扩展新规则**：改 `normalize()` 函数内部，加一段 `re.subn` 或 `.count/.replace`。务必先 dry-run 看规模。
@@ -207,23 +191,18 @@ python3 scripts/merge_parts.py ios
 
 ## `diff_report.py`
 
-**作用**：生成按 source 分组高亮的 HTML 审核报告。
+**作用**：按文案变更类型展示当前英文、变化前英文、上一轮精修译文、最终译文、来源记录和备注。
 
 **用法**：
 ```bash
-python3 scripts/diff_report.py ios [translated.json]
+python3 scripts/diff_report.py ios [translated.json] [--update]
 ```
 
-**输出**：`work/<p>/report.html`
+**输出**：默认 `work/<p>/report.html`；`--update` 按 `to-translate.json` 仅展示本轮审校条目，输出 `update-report.html`。
 
-**分组顺序**（审核优先级）：
-1. 🔴 `fresh` — 完全重写，最应该审核
-2. 🟠 `rewrite_official` — 改写官方机翻
-3. 🟡 `rewrite_ref` — 微调参考包
-4. 🟢 `adopt` — 直接采用，扫一眼即可
-5. ⚫ `missing` — AI 没处理的（理论上不该有）
+**数据来源**：英文来自基准，旧英文与精修译文来自 `translation-memory.json`，变更分类来自 `update.json`。首次初始化没有历史数据时，显示全量文案。
 
-**视觉**：不同 source 背景色高亮，key 等宽字体，表头 sticky。
+**分组**：尚无译文、新增文案、英文变化、既有文案审校和其他条目。仅显示有条目的组。所有本轮条目均需审校，`source` 仅作追溯，参考包不作为默认对照列。
 
 ---
 
@@ -237,6 +216,8 @@ python3 scripts/build_strings.py ios [translated.json]
 ```
 
 **输出**：`dist/<p>/zh-Hans-custom.strings`（按 key 字母序）
+
+**门禁**：每次打包都对当前英文重新校验 key 覆盖、结构和占位符；失败不会覆盖已有 `.strings`。
 
 **保证**：通过 `_common.dump_strings` 正确转义 `"` `\\` `\n` `\t` `\r`。已验证 `.strings → parse → build → parse` 往返一致。
 

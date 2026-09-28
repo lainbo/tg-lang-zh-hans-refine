@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""全局风格统一化 pass。对 translated.part*.json 的 final 字段应用规则。
+"""全局风格统一化 pass。对合并后的 translated.json 的 final 字段应用规则。
 
 规则 (保守, 可扩展):
   1. '您' → '你'        (Telegram 官方风格偏口语)
@@ -49,9 +49,9 @@ def main(platform: str, apply: bool) -> None:
     dirs = platform_dirs(platform)
     work = dirs["work"]
 
-    parts = sorted(work.glob("translated.part*.json"))
-    if not parts:
-        raise SystemExit(f"no translated.part*.json under {work}")
+    parts = [work / "translated.json"]
+    if not parts[0].exists():
+        raise SystemExit(f"missing {parts[0]}. 先合并译文。")
 
     rule_totals: dict[str, int] = {}
     changed_entries: list[dict] = []
@@ -98,7 +98,7 @@ def main(platform: str, apply: bool) -> None:
     for rule, n in sorted(rule_totals.items(), key=lambda x: -x[1]):
         report_lines.append(f"  - `{rule}`: {n} 次")
     report_lines.append("")
-    report_lines.append("## 各分片修改数")
+    report_lines.append("## 文件修改数")
     for f, n in sorted(per_file_changes.items()):
         report_lines.append(f"- {f}: {n} 条")
 

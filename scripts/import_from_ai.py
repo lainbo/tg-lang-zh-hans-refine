@@ -27,34 +27,17 @@ from _common import platform_dirs
 VALID_SOURCES = {"adopt", "rewrite_ref", "rewrite_official", "fresh"}
 
 # 占位符: Apple %@ / %1$@ / %d / %1$d / %s / %1$s / %1$.2f 等
-_PLACEHOLDER_RE = re.compile(r"%(?:\d+\$)?[@dsif]|%(?:\d+\$)?\.\d+[df]|\{[^{}]+\}")
+_PLACEHOLDER_RE = re.compile(r"%%|%(?:\d+\$)?(?:\.\d+)?[@dsif]|\{[^{}]+\}")
 
 
 def placeholders(s: str) -> list[str]:
     return sorted(_PLACEHOLDER_RE.findall(s))
 
 
-def main(platform: str, translated_name: str, part: int | None) -> None:
-    dirs = platform_dirs(platform)
-    work = dirs["work"]
-
-    if part is None:
-        baseline_path = work / "merged.json"
-        default_translated = "translated.json"
-    else:
-        baseline_path = work / f"to-translate.part{part:02d}.json"
-        default_translated = f"translated.part{part:02d}.json"
-
-    if not baseline_path.exists():
-        raise SystemExit(f"missing baseline: {baseline_path}")
-    merged = json.loads(baseline_path.read_text(encoding="utf-8"))
-
-    translated_path = work / (translated_name or default_translated)
-    if not translated_path.exists():
-        raise SystemExit(f"missing {translated_path}. 把 AI 回传结果放到这里")
-    translated = json.loads(translated_path.read_text(encoding="utf-8"))
-
+def validate(merged: dict, translated: dict) -> list[dict]:
     problems: list[dict] = []
+    if not isinstance(translated, dict):
+        return [{"key": "", "issue": "top_level_not_object"}]
     missing = sorted(set(merged.keys()) - set(translated.keys()))
     extra = sorted(set(translated.keys()) - set(merged.keys()))
     for k in missing:
@@ -73,8 +56,10 @@ def main(platform: str, translated_name: str, part: int | None) -> None:
         if not isinstance(final, str) or not final:
             problems.append({"key": key, "issue": "missing_final"})
             continue
-        if source not in VALID_SOURCES:
+        if not isinstance(source, str) or source not in VALID_SOURCES:
             problems.append({"key": key, "issue": f"invalid_source:{source}"})
+        if "note" in entry and not isinstance(entry["note"], str):
+            problems.append({"key": key, "issue": "invalid_note"})
         en = merged[key]["en"]
         en_ph = placeholders(en)
         zh_ph = placeholders(final)
@@ -87,6 +72,24 @@ def main(platform: str, translated_name: str, part: int | None) -> None:
                 "en": en,
                 "final": final,
             })
+        else:
+            def unnumbered(text):
+                return [p for p in _PLACEHOLDER_RE.findall(text)
+                        if p.startswith("%") and p != "%%" and "$" not in p]
+            if unnumbered(en) != unnumbered(final):
+                problems.append({"key": key, "issue": "placeholder_order_mismatch"})
+    return problems
+
+
+def main(platform: str, translated_name: str | None, part: int | None) -> None:
+    dirs = platform_dirs(platform)
+    work = dirs["work"]
+    suffix = f".part{part:02d}" if part is not None else ""
+    baseline_path = work / (f"to-translate{suffix}.json" if suffix else "merged.json")
+    translated_path = work / (translated_name or f"translated{suffix}.json")
+    merged = json.loads(baseline_path.read_text(encoding="utf-8"))
+    translated = json.loads(translated_path.read_text(encoding="utf-8"))
+    problems = validate(merged, translated)
 
     report = {
         "total_merged": len(merged),
@@ -94,7 +97,7 @@ def main(platform: str, translated_name: str, part: int | None) -> None:
         "problem_count": len(problems),
         "problems": problems,
     }
-    out = work / "validation.json"
+    out = work / f"validation{suffix}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 摘要
@@ -112,6 +115,7 @@ def main(platform: str, translated_name: str, part: int | None) -> None:
         print("\n✅ 校验通过, 可以跑 build_strings.py 打包")
     else:
         print("\n⚠️  有问题, 修好后重跑本脚本")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

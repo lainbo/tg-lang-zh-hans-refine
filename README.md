@@ -1,119 +1,60 @@
 # tg-lang-refine
 
-Telegram 简体中文语言包精修工具链。以 **官方英文** 为基准，**官方简中 + 历史精修包 + 冻结社区参考包（@zhcncc 等）** 为翻译记忆，交给外部翻译 AI 审校，本地打包后上传到 translations.telegram.org。
+Telegram 简体中文语言包精修工具链。以当前官方英文、功能上下文和共用术语为依据，由翻译 AI 翻译并复核，生成可上传到 translations.telegram.org 的自定义语言包。
 
-## 底层逻辑
+质量标准是**信、达、雅与跨平台一致性**，详见 [审校规范与共用术语](docs/06-translation-style.md)。脚本只负责数据整理、校验和打包，使用 Python 标准库，不调用翻译 API。
 
-```
-官方英文 (baseline)
-   ├── 官方简中 (机翻味重, 待改版)
-   ├── 当前精修包 (增量维护的主要参考源)
-   └── @zhcncc 等冻结社区包 (首次翻译参考源)
-              ↓
-       按 key 对齐合并 (merge.py)
-              ↓
-       导出给翻译 AI 审校 (export_for_ai.py)
-              ↓
-       [外部翻译 AI 工作]
-              ↓
-       导入 AI 输出 (import_from_ai.py)
-              ↓
-       生成 .strings 最终产物
-              ↓
-       手动上传 translations.telegram.org
-```
+## 维护范围
 
-## 目录结构
+- iOS、TDesktop 独立更新，共用术语规范。
+- macOS 保留历史产物，停止维护。
+- 日常更新只下载官方英文。官方简中和社区包保留本地文件，按具体疑点查阅。
+- 自己的精修译文作为翻译记忆。英文未变时稳定复用，发现错误或术语冲突时定向修订。
 
-```
-tg-lang-refine/
-├── data/
-│   ├── ios/
-│   │   ├── raw/          # 原始下载文件 (.strings)
-│   │   │   ├── en.strings           ← 官方英文 baseline
-│   │   │   ├── official-zh.strings  ← 官方简中 (机翻版)
-│   │   │   ├── ref-current-refined.strings ← 当前精修包, 增量维护参考
-│   │   │   └── zhcncc.strings       ← @zhcncc 冻结历史参考包
-│   │   └── parsed/       # 解析后的 JSON (scripts 产出)
-│   └── macos/            # 历史产物, 已停止维护
-├── work/
-│   ├── ios/
-│   │   ├── merged.json       ← 多源对齐
-│   │   ├── to-translate.json ← 喂给翻译 AI
-│   │   ├── translated.json   ← 翻译 AI 回写
-│   │   └── report.html       ← 审核对比视图
-├── dist/
-│   └── ios/
-│       └── zh-Hans-custom.strings  ← 上传用的最终产物
-├── scripts/   # Python 脚本, 无第三方依赖
-└── docs/
-    └── SOURCES.md   # 如何下载三个源文件
-```
+## 日常增量更新
 
-## 使用流程 (iOS)
-
-### 1. 下载源文件
-详见 `docs/SOURCES.md`。增量维护时把两个官方 .strings 文件放到 `data/ios/raw/`:
-- `en.strings` (官方英文)
-- `official-zh.strings` (官方新出的简中, 你要替换掉的那版)
-
-`zhcncc.strings` 只作为首次翻译时留下的冻结参考源，后续不再要求下载新版。每次增量前先把当前精修包保存成参考源：
+通过已登录的浏览器，在对应平台的官方英文页面导出 `.strings`，详见 [下载指引](docs/SOURCES.md)。将实际下载路径传给以下命令，**保留现有 raw 和 work，交给脚本先备份再替换**：
 
 ```bash
-cp dist/ios/zh-Hans-custom.strings data/ios/raw/ref-current-refined.strings
+python3 scripts/prepare_update.py ios \
+  --en ~/Downloads/ios_en_VERSION.strings
 ```
 
-### 2. 解析成 JSON
+脚本会把上一轮源文件、中间产物与成品归档到 `work/ios/history/<时间>/`，保存来源文件名和 SHA-256，比较新旧英文。新增与英文变化的条目只携带当前及变化前英文，写入 `to-translate.partNN.json`；其余已校验译文保留在 `translated.reused.json`。旧英文与精修译文另存为 `translation-memory.json`。每片默认 100 条。
+
+翻译 AI 阅读 `work/ios/PROMPT.md`，先根据英文和上下文初译，再查精修记忆核对表达，随后单独复核语义、格式与两平台一致性。逐片输出 `translated.partNN.json`，在 `review.md` 记录实际复核范围和疑点处理。每片完成后校验：
+
 ```bash
-python3 scripts/parse_strings.py ios
+python3 scripts/import_from_ai.py ios --part 1
 ```
 
-### 3. 对齐合并
+全部审校完成后：
+
 ```bash
-python3 scripts/merge.py ios
-```
-产出 `work/ios/merged.json`, 每个 key 带 `{en, official_zh, refs: {"current-refined": "...", "zhcncc": "..."}}`。
-
-### 4. 导出给翻译 AI
-```bash
-python3 scripts/export_for_ai.py ios
-```
-产出 `work/ios/to-translate.json` 和 `work/ios/PROMPT.md` (建议的翻译 AI prompt)。
-
-### 5. 翻译 AI 工作 (外部)
-你把 `to-translate.json` + `PROMPT.md` 丢给你的翻译 AI, 得到 `translated.json`, 放回 `work/ios/`。
-
-格式约定:
-```json
-{
-  "lng_chat_typing": {
-    "final": "对方正在输入…",
-    "source": "rewrite_ref",    // 采用/改写/重写, 便于审核
-    "note": ""                  // 可选, 改写原因
-  }
-}
-```
-
-### 6. 生成审核报告
-```bash
-python3 scripts/diff_report.py ios
-```
-产出 `work/ios/report.html`, 浏览器打开, 按 source 分类高亮, 重点看 `改写/重写` 的条目。
-
-### 7. 打包
-```bash
+python3 scripts/merge_parts.py ios
+python3 scripts/normalize.py ios
+# 查看 normalize-report.md，有修改且确认符合上下文时执行：
+python3 scripts/normalize.py ios --apply
+python3 scripts/import_from_ai.py ios
+python3 scripts/diff_report.py ios --update
 python3 scripts/build_strings.py ios
 ```
-产出 `dist/ios/zh-Hans-custom.strings`, 上传到你自己的 Telegram 自定义语言包。
 
-## 平台维护状态
+最终文件为 `dist/ios/zh-Hans-custom.strings`，本次审校报告为 `work/ios/update-report.html`，按新增、英文变化和既有修订展示原文及新旧译文。TDesktop 使用相同命令，把 `ios` 换为 `tdesktop`，并传入该平台的下载文件。
 
-- iOS：继续维护。
-- TDesktop：继续维护，和 iOS 是独立字符串集，需要单独跑。
-- macOS：停止维护，保留历史产物，不再下载和上传。
+校验失败会以非零状态退出；合并与打包均在写入前检查。打包完成后，人工上传至自定义语言包对应平台，并点击 **EDIT PHRASES** 入库。
 
-## 设计原则
+## 从零初始化与文档
 
-- **零外部依赖**: 纯 Python 标准库, `python3` 直接跑。
-- **可审可回滚**: 每一步都产出中间文件, 出问题能定位到条目。
-- **翻译与流水线解耦**: 本项目不做翻译, 只做数据搬运和审核辅助。
+首次准备英文源文件后，依次运行 `parse_strings.py`、`merge.py`、`export_for_ai.py --chunk 100`，然后逐片审校。完整步骤见 [操作流程](docs/02-workflow.md)。
+
+- [架构与设计原则](docs/01-architecture.md)
+- [脚本参数](docs/03-scripts.md)
+- [中间产物格式](docs/04-data-format.md)
+- [故障排查与上传限制](docs/05-troubleshooting.md)
+
+模型升级后继续遵循相同的审校标准，按实际问题决定修订范围。
+
+源文件、工作区和成品均由 Git 忽略，需自行备份；每轮本地归档不能替代异地备份。
+
+端到端验证：`python3 tests/e2e_workflow.py`，结果保存在 `work/maintenance/e2e-result.json`。

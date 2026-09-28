@@ -1,152 +1,105 @@
 # 02 · 完整操作流程
 
-从 0 到上线的一条命令链，以 **iOS** 为主线。TDesktop 是独立平台，命令同构；macOS 已停止维护，仅保留历史产物。
+## 日常增量维护
 
----
+### 1. 导出官方英文
 
-## 前置准备
+在已登录浏览器中，导出 iOS 或 TDesktop 的英文 `.strings`，详见 [SOURCES.md](SOURCES.md)。保留下载文件原名，交给下一步记录版本与校验和。官方简中和社区包按具体疑点查阅本地存档，需要最新官方简中时再单独下载。
 
-需要 Telegram 账号登录 [translations.telegram.org](https://translations.telegram.org)，并创建一个自定义语言包（可参考 `docs/05-troubleshooting.md#创建语言包参数建议`）。
+### 2. 备份并准备增量
 
----
-
-## Step 1 · 下载源文件
-
-详见 `docs/SOURCES.md`。把以下文件放到 `data/ios/raw/`：
-
-| 文件 | 来源 |
-|---|---|
-| `en.strings` | https://translations.telegram.org/en/ios/ → Export |
-| `official-zh.strings` | https://translations.telegram.org/zh-hans/ios/ → Export |
-
-`zhcncc.strings` 是冻结历史参考源，只在首次翻译时下载；后续 Telegram 新增文案它不会更新，增量维护时不要把它列为必下文件。
-
-每次增量维护前，把当前精修包保存为主要参考源：
+保留旧 `merged.json`、`translated.json` 和 raw 源文件，使用实际下载路径：
 
 ```bash
-cp dist/ios/zh-Hans-custom.strings data/ios/raw/ref-current-refined.strings
+python3 scripts/prepare_update.py ios \
+  --en ~/Downloads/ios_en_VERSION.strings \
+  --chunk 100
 ```
 
-> 可选：更多参考源命名为 `ref-<name>.strings` 放入同目录，`merge.py` 自动识别。
+输出：
 
----
+- `history/<时间>/`：旧 raw、parsed、work 文件与 dist 的完整归档。
+- `merged.json`：当前全量英文。
+- `update.json`：英文来源文件名、SHA-256、备份位置、新增/变化/删除 key 与复用数量。
+- `translated.reused.json`：原文未变的已校验译文。
+- `translation-memory.json`：上一轮英文与精修译文的配对记录，供初译后按需核对。
+- `to-translate.json` 与 `to-translate.partNN.json`：本轮待审校英文，变化条目包含 `previous_en`。
+- `PROMPT.md`：包含共用术语表的审校合约。
 
-## Step 2 · 解析 + 对齐 + 分片
+当前全量译文不完整时，脚本会停止，先完成当前轮再启动下一轮。
 
-```bash
-cd /Users/owen/Projects/Self/tg-lang-refine
+### 3. 理解原文、翻译与复核
 
-python3 scripts/parse_strings.py ios          # .strings → JSON
-python3 scripts/merge.py ios                  # 对齐三源 → merged.json
-python3 scripts/export_for_ai.py ios --chunk 500   # 切 30 片 + PROMPT.md
-```
+翻译 AI 先读 `PROMPT.md` 和共用术语表，以英文、key、同功能上下文拟定中文。分片外的相关英文可在 `merged.json` 中查找；有歧义时查看客户端界面或官方源码。
 
-产物：
-- `work/ios/merged.json`（全量对齐视图）
-- `work/ios/to-translate.partNN.json`（30 片，喂给 AI）
-- `work/ios/PROMPT.md`（翻译 AI 任务说明）
+初译后，按相关 key 查 `translation-memory.json` 中成对的旧英文与精修译文，核对术语和历史表达。遇到具体疑点才查官方简中或社区包；在备注中写明来源和判断依据。参考译文不能单独证明功能含义。
 
----
+初译完成后，单独再做一遍复核：逐条对照当前英文检查主体、对象、条件、否定、范围、后果和参数角色，再检查同功能、两平台和复数分支的一致性。可以由同一 AI 在独立步骤完成，也可在新会话中审校。模型版本变化不减少复核要求。
 
-## Step 3 · 喂给翻译 AI
-
-两条路径二选一，详见 `docs/05-troubleshooting.md#喂-ai-的两种模式`。
-
-**核心交付合约**：AI 必须输出符合下列结构的 JSON：
+输出结构：
 
 ```json
 {
   "<key>": {
-    "final": "<最终译文>",
-    "source": "adopt | rewrite_ref | rewrite_official | fresh",
-    "note": "<可选备注>"
+    "final": "最终译文",
+    "source": "fresh",
+    "note": "需要记录时，说明语义判断、术语例外或上下文依据。"
   }
 }
 ```
 
-**单片校验必须跑**（AI 每完成一片必做）：
-```bash
-python3 scripts/import_from_ai.py ios --part N
-```
-问题数必须为 0。
-
----
-
-## Step 4 · 合并 + 全局规则统一
+英文独立翻译使用 `fresh`。实际采用或改写已有译文时，如实使用 `adopt`、`rewrite_ref` 或 `rewrite_official` 并记录来源，详见 [数据格式](04-data-format.md)。每片保存为对应的 `translated.partNN.json` 后执行：
 
 ```bash
-python3 scripts/merge_parts.py ios            # 30 片 → translated.json
-python3 scripts/normalize.py ios              # dry-run, 看影响面
-python3 scripts/normalize.py ios --apply      # 真改, 自动备份 .bak
+python3 scripts/import_from_ai.py ios --part 1
 ```
 
-`normalize` 当前规则：
-- `您` → `你`
-- `...` / `....` → `…`
-- `。。。` → `…`
+每片问题数须为 0。在 `work/<平台>/review.md` 记录实际复核范围、术语决策、歧义依据和未决项；影响含义的疑点解决后再完成审校。首次聊天模式由维护者保存该记录。
 
-`--apply` 会在 `work/ios/translated.partNN.json.bak` 留备份，回滚：
-```bash
-for f in work/ios/translated.part*.json.bak; do mv "$f" "${f%.bak}"; done
-python3 scripts/merge_parts.py ios   # 重新合并
-```
+英文未变的译文默认保留。发现既有错误、语境变化或术语冲突时，定向列入审校：将该 key 的英文加入待译总表与对应分片，从 `translated.reused.json` 移出，在 `update.json` 的 `reviewed_existing` 记录，并更新 `reused_count`。输出 key 应与对应输入分片一致。不要仅因模型升级全量重译。
 
----
-
-## Step 5 · 全量校验 + 审核报告 + 打包
+### 4. 合并、规范化、校验与打包
 
 ```bash
-python3 scripts/import_from_ai.py ios         # 全量校验 → validation.json
-python3 scripts/diff_report.py ios            # HTML 审核报告
-python3 scripts/build_strings.py ios          # 最终 .strings
+python3 scripts/merge_parts.py ios
+python3 scripts/normalize.py ios
+# 查看 normalize-report.md；有命中且全部符合上下文时：
+python3 scripts/normalize.py ios --apply
+python3 scripts/import_from_ai.py ios
+python3 scripts/diff_report.py ios --update
+python3 scripts/diff_report.py ios
+python3 scripts/build_strings.py ios
 ```
 
-产物：
-- `work/ios/validation.json`（问题清单，理想 0 问题）
-- `work/ios/report.html`（浏览器打开，按 source 分组审核）
-- `dist/ios/zh-Hans-custom.strings`（**上传用的最终文件**）
+合并后以 `translated.json` 为主文件。`normalize` 直接修改它，并创建 `translated.json.bak`。后续人工修订也修改主文件，然后重新校验、生成报告并打包；不要重新合并旧片覆盖这些修改。
 
----
+结构校验和语义审校均完成后，最终文件为 `dist/ios/zh-Hans-custom.strings`。本轮报告 `update-report.html` 按新增、英文变化和既有修订分组，展示当前英文、变化前英文、旧精修译文和最终译文；全量审查打开 `report.html`。
 
-## Step 6 · 上传到 Telegram
+### 5. 人工上传
 
-1. 打开 [translations.telegram.org](https://translations.telegram.org) → 自己的自定义语言包
-2. 进入 **iOS 平台页面**（点击 iOS 图标或左侧 iOS 入口）
-3. 点 **Import phrases** → 上传 `dist/ios/zh-Hans-custom.strings`
-4. 等待识别完成，页面下方会显示 `Modified Phrases` 数量
-5. 点击右上角 **EDIT PHRASES** 把翻译真正入库（**关键一步**，不点等于白传）
-6. iPhone Telegram 打开 Sharing Link（形如 `https://t.me/setlanguage/<short-name>`）
-7. 点击确认切换到自定义语言包
+1. 进入自定义语言包对应平台页面。
+2. 点击 **Import phrases**，选择对应 `dist/<platform>/zh-Hans-custom.strings`。
+3. 核对识别结果，点击 **EDIT PHRASES** 入库。
+4. 在客户端打开语言包 Sharing Link 并检查实际显示。
 
-**已知限制**：
-- 单次批量入库 ~1000 条后需刷新再继续，属 Telegram 平台节流
-- 约 54 条安全/法律敏感 key 会被平台拒收，返回 `affected_cnt: 0`，详见 `docs/05-troubleshooting.md#安全保留-key-白名单`
+平台可能限流或拒收保留 key，见 [故障排查](05-troubleshooting.md)。本地校验不能替代线上导入验证。
 
----
+TDesktop 按同样步骤独立更新，命令中的 `ios` 改为 `tdesktop`，下载文件也必须属于 TDesktop。macOS 不参与更新。
 
-## macOS 维护状态
+## 首次初始化
 
-macOS 已停止维护。不要再下载 macOS 源文件，也不要继续跑 macOS 打包上传流程；现有 `data/macos/`、`work/macos/`、`dist/macos/` 只作为历史记录保留。
-
-TDesktop 也是**独立字符串集**，流程与 iOS 基本相同，不需要 `seed_ios_ref.py` 这类跨平台复用步骤。增量维护只下载官方英文和官方简中，历史 `zhcncc.strings` 仅作为冻结参考源：
+从零开始时，只需将英文放入 `data/<platform>/raw/en.strings`，然后：
 
 ```bash
-# Step 1: 下载 data/tdesktop/raw/en.strings 和 official-zh.strings
-python3 scripts/parse_strings.py tdesktop
-python3 scripts/merge.py tdesktop
-python3 scripts/export_for_ai.py tdesktop --chunk 500
-# Step 3: 用外部 AI / 子代理逐片翻译 translated.partNN.json
-python3 scripts/merge_parts.py tdesktop
-python3 scripts/normalize.py tdesktop              # dry-run, 看影响面
-python3 scripts/normalize.py tdesktop --apply      # 真改, 自动备份 .bak
-python3 scripts/import_from_ai.py tdesktop
-python3 scripts/diff_report.py tdesktop
-python3 scripts/build_strings.py tdesktop
-# Step 6: 上传到 translations.telegram.org 的 tdesktop 平台页面
+python3 scripts/parse_strings.py ios
+python3 scripts/merge.py ios
+python3 scripts/export_for_ai.py ios --chunk 100
 ```
 
----
+已有官方简中和参考包可以保留，默认输入只导出英文。首次没有本项目翻译记忆，按上述第 3～5 步完成全量翻译和审校；以后使用 `prepare_update.py` 增量维护。
 
-## 迭代维护
+## 恢复备份
 
-日常用 Telegram 攒"不顺眼"的条目 → 在 `work/ios/translated.json` 里改对应 key 的 `final` 字段 → 重跑 `build_strings.py` → 上传新 `.strings` → 再点一次 `EDIT PHRASES`。Telegram 客户端会周期性拉取更新，不用重新点 Sharing Link。
+单次规范化可复制 `translated.json.bak` 回 `translated.json` 后重新校验和打包。
+
+整轮回滚时，先另存当前状态，再将 `update.json` 所指归档内的 raw、parsed、work、dist 分别恢复到对应平台目录。不要混用不同轮次的英文基准和最终译文。

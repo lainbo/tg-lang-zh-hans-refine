@@ -109,12 +109,8 @@ python3 scripts/import_from_ai.py ios --part 11
 
 **修法**：
 ```bash
-# 全量回滚
-for f in work/ios/translated.part*.json.bak; do mv "$f" "${f%.bak}"; done
-python3 scripts/merge_parts.py ios
-
-# 调整 normalize.py:normalize() 规则，跳过特定场景
-# 重跑 dry-run 看 diff
+cp work/ios/translated.json.bak work/ios/translated.json
+python3 scripts/import_from_ai.py ios
 python3 scripts/normalize.py ios
 ```
 
@@ -150,7 +146,7 @@ python3 scripts/normalize.py ios
 ```bash
 python3 scripts/parse_strings.py tdesktop
 python3 scripts/merge.py tdesktop
-python3 scripts/export_for_ai.py tdesktop --chunk 500
+python3 scripts/export_for_ai.py tdesktop --chunk 100
 ```
 
 **如果旧翻译已经做了很多，不要推倒重来：**
@@ -161,7 +157,7 @@ python3 scripts/export_for_ai.py tdesktop --chunk 500
 
 ---
 
-## 喂 AI 的两种模式
+## 向 AI 提供任务的两种模式
 
 ### 模式 A：AI 有文件系统权限（另一个 Claude Code / Cursor / Cline）
 
@@ -169,20 +165,21 @@ python3 scripts/export_for_ai.py tdesktop --chunk 500
 
 ```
 我在当前目录跑 Telegram 简中语言包精修任务, 你负责翻译审校。
-1. 先读 work/ios/PROMPT.md 吸收任务规则
-2. 依次读取 work/ios/to-translate.part01.json ~ part30.json
-3. 每读完一片, 按规则产出并写入 work/ios/translated.part01.json ~ part30.json
-4. 每片完成后跑 python3 scripts/import_from_ai.py ios --part N, 问题数 0 才算完成
-5. 30 片全部完成后告诉我
+1. 先读 work/ios/PROMPT.md，按英文、上下文与共用术语逐片初译
+2. 读取 work/ios/to-translate.part01.json ~ partNN.json；相关英文可在 merged.json 中检索
+3. 初译后按相关 key 查 translation-memory.json 核对精修表达；参考包只在具体疑点需要时查阅
+4. 单独再做语义与一致性复核，输出对应 translated.partNN.json，并在 review.md 记录实际复核范围及疑点处理
+5. 每片完成后运行 python3 scripts/import_from_ai.py ios --part N；结构校验与语义复核都完成后再汇报
 ```
 
 ### 模式 B：AI 只有聊天界面
 
 **开场**：贴 `PROMPT.md` 全文 + 下面这段：
 ```
-接下来分 30 批发 JSON 分片 part01 ~ part30, 每批约 500 条。
-每批只输出一个纯 JSON 对象, 顶层 key 完全一致, 不要 markdown 代码块包裹。
-被截断时回"继续", 从中断处补完。
+接下来按实际分片数分批发 JSON 分片 part01 ~ partNN, 每批默认 100 条。
+先根据英文和上下文初译，需要相关英文时说明具体 key 或功能。
+初译后我再按需提供精修记忆、功能资料或参考译文；完成语义与一致性复核后输出纯 JSON。
+顶层 key 与该分片完全一致，不要 markdown 代码块包裹。
 ```
 
 **每批**：
@@ -191,7 +188,7 @@ part01:
 <粘贴 to-translate.part01.json 全文>
 ```
 
-AI 回复保存为 `work/ios/translated.part01.json`（去掉首尾可能的 ```json 代码块）。
+AI 回复保存为 `work/ios/translated.part01.json`（去掉首尾可能的 ```json 代码块），另行索取实际复核记录并保存到 `work/ios/review.md`。聊天模式按疑点提供相关资料，不必预先粘贴所有参考包。
 
 ---
 
@@ -204,9 +201,7 @@ AI 回复保存为 `work/ios/translated.part01.json`（去掉首尾可能的 ```
 3. 上传新 `.strings` → 点 EDIT PHRASES
 4. 客户端会周期性拉取更新，无需重新切换语言包
 
-**如果要同时同步 part 文件**（避免下次 merge_parts 时被旧 part 覆盖）：
-- 改完 `translated.json` 后也要改对应 `translated.partNN.json`
-- 或者直接从 `translated.json` 重新切片回去（可以写个 `split.py`，当前未实现）
+合并后的 `translated.json` 是主文件。分片只保留审校交付记录，不要再次合并旧片覆盖主文件修订。下一次更新使用 `prepare_update.py`，它会从当前主文件建立翻译记忆并归档旧轮次。
 
 ---
 

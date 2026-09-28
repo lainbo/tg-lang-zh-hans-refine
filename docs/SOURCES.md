@@ -1,69 +1,45 @@
 # 源文件下载指引
 
-所有下载都需要 Telegram 账号登录 translations.telegram.org。本项目不代下, 请手动放入 `data/<platform>/raw/`。
+日常更新只需要当前平台的官方英文。用户授权时，AI 可以操作已登录的浏览器完成下载。增量更新保留下载文件原名，将路径传给 `prepare_update.py`，由脚本先归档旧数据再安装新英文。
 
-## 平台维护状态
+## 平台与英文源
 
-- iOS：继续维护。
-- TDesktop：继续维护，和 iOS 独立更新。
-- macOS：停止维护，保留历史产物，不再要求下载新源文件。
+| 平台 | 官方英文 | 维护状态 |
+|---|---|---|
+| iOS | https://translations.telegram.org/en/ios/ | 持续维护 |
+| TDesktop | https://translations.telegram.org/en/tdesktop/ | 独立维护 |
+| macOS | 保留现有文件 | 停止维护 |
 
-## iOS 平台
+在对应页面登录后，点击 **Export**，选择 `.strings` 格式，下载全部字符串。
 
-### 增量维护必下
+增量更新示例：
 
-#### 1. 官方英文 baseline → `en.strings`
+```bash
+python3 scripts/prepare_update.py ios --en ~/Downloads/ios_en_VERSION.strings
+python3 scripts/prepare_update.py tdesktop --en ~/Downloads/tdesktop_en_VERSION.strings
+```
 
-地址: https://translations.telegram.org/en/ios/
+两平台分别运行，文件必须匹配对应平台。首次初始化才将英文重命名为 `en.strings` 放入 `data/<platform>/raw/`。
 
-登录后右上角 **Export** → 选 `.strings` 格式 → 下载全部字符串。
-重命名为 `en.strings`, 放到 `data/ios/raw/en.strings`。
+## 本项目精修记忆
 
-#### 2. 官方简中 (新出的机翻版) → `official-zh.strings`
+`prepare_update.py` 从当前 `merged.json` 与 `translated.json` 生成 `work/<platform>/translation-memory.json`，同时保存旧英文和旧精修译文。它供初译后的术语与历史表达核对；原文未变的译文另存到 `translated.reused.json`，用于稳定复用。
 
-地址: https://translations.telegram.org/zh-hans/ios/ 
-(或 zh-hant 看你要改哪个)
+当前精修主文件是本项目自己的积累，每次更新前必须保留。原有 `ref-current-refined.strings` 作为历史文件保留，当前翻译记忆以成对记录为准。
 
-同样 **Export** → `.strings`。重命名为 `official-zh.strings`。
+## 官方简中与社区包按需查阅
 
-### 冻结参考源，不再更新
+遇到具体疑点时，可先按 key 查阅本地 `data/<platform>/parsed/official-zh.json`、`zhcncc.json` 或 `ref-*.json`。文件可能过时，须结合当前英文核对。
 
-#### 社区参考包 @zhcncc → `zhcncc.strings`
+需要最新官方简中时，使用与英文相同的导出方式：
 
-地址: https://translations.telegram.org/zhcncc/ios/
+- iOS：https://translations.telegram.org/zh-hans/ios/
+- TDesktop：https://translations.telegram.org/zh-hans/tdesktop/
 
-@zhcncc 只作为首次翻译时的历史参考源。后续 Telegram 新增文案它不会继续覆盖，因此增量维护时**不要再要求下载新版 zhcncc**；保留仓库里已有的 `data/ios/raw/zhcncc.strings` 参与参考即可。
+保留下载原件；先备份现有同名文件，再另存为 `data/<platform>/raw/official-zh.strings`。运行 `parse_strings.py <平台>` 后即可在对应 JSON 中按 key 查阅。它不进入默认待译输入，查阅时在审校备注中记录文件版本、相关 key 和采用依据。
 
-如果需要从零初始化，@zhcncc 是自定义语言包。如果该包 owner 允许公开导出, 在页面上能看到 Export 按钮; 否则你需要:
-- 方案 A: 把该包 fork 到自己账号下 (页面上有 fork 选项), fork 后自己的副本可以 Export
-- 方案 B: 联系 owner 申请权限
-
-落地为 `data/ios/raw/zhcncc.strings`。
-
-## macOS 平台
-
-macOS 已停止维护。保留已有 `data/macos/`、`work/macos/`、`dist/macos/` 作为历史记录，不再下载新源文件，不再上传新包。
-
-## TDesktop 平台
-
-TDesktop 同理, 地址替换成 `/tdesktop/`:
-- https://translations.telegram.org/en/tdesktop/
-- https://translations.telegram.org/zh-hans/tdesktop/
-
-落地到 `data/tdesktop/raw/`:
-- `en.strings`
-- `official-zh.strings`
-
-`zhcncc.strings` 同 iOS，仅作为历史参考源保留；增量维护不要求下载新版。
-
-## 增加更多参考源 (可选)
-
-如果想多挂几个社区包做交叉参考, 命名为 `ref-<name>.strings` 放进 raw 目录, `merge.py` 会自动识别 `ref-*` 前缀纳入 refs。
+社区包 `zhcncc.strings` 与其他 `ref-*.strings` 保留已有文件。默认流程不需要下载或维护新版社区包。任何参考译文都不能代替功能上下文的查证。
 
 ## 上传回写
 
-审校完产出 `dist/<platform>/zh-Hans-custom.strings` 后:
-1. 在 translations.telegram.org 创建或选择你自己的自定义语言包
-2. 页面上有 **Import** 功能, 上传 .strings 文件
-3. 生成 `tg://setlanguage?lang=<你的包名>` 链接
-4. 在客户端打开链接应用
+审校完产出 `dist/<platform>/zh-Hans-custom.strings` 后，人工上传至自定义语言包的对应平台，核对后点击 **EDIT PHRASES** 入库，再在客户端检查实际效果。详细步骤见 [操作流程](02-workflow.md)。

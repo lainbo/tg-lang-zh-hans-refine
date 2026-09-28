@@ -9,6 +9,7 @@ import json
 import sys
 
 from _common import dump_strings, platform_dirs
+from import_from_ai import validate
 
 
 def main(platform: str, translated_name: str) -> None:
@@ -21,11 +22,11 @@ def main(platform: str, translated_name: str) -> None:
     if not translated_path.exists():
         raise SystemExit(f"missing {translated_path}")
     translated = json.loads(translated_path.read_text(encoding="utf-8"))
-
-    final: dict[str, str] = {}
-    for key, entry in translated.items():
-        if isinstance(entry, dict) and isinstance(entry.get("final"), str) and entry["final"]:
-            final[key] = entry["final"]
+    baseline = json.loads((work / "merged.json").read_text(encoding="utf-8"))
+    problems = validate(baseline, translated)
+    if problems:
+        raise SystemExit(f"拒绝打包：{len(problems)} 个校验问题。先运行 import_from_ai.py 查看详情。")
+    final = {key: entry["final"] for key, entry in translated.items()}
 
     out = dist / "zh-Hans-custom.strings"
     out.write_text(dump_strings(final), encoding="utf-8")

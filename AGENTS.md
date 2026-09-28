@@ -8,13 +8,13 @@ Telegram 简体中文语言包精修工具链。本文档是 AI agent 维护本�
 
 ## 一句话定位
 
-以官方英文为 baseline，把官方简中 + 当前精修包 + 冻结社区包（@zhcncc 等）作为翻译记忆（TM），交给**外部翻译 AI** 做审校，本地打包成 `.strings` 后手动上传 translations.telegram.org 成为**自定义语言包**。本项目**只做数据搬运和审核辅助，不做翻译**。
+以当前官方英文、功能上下文和共用术语为依据，由**翻译 AI** 初译并单独复核语义与一致性。本项目精修译文作为翻译记忆稳定复用；官方简中与社区包按具体疑点查阅。脚本只做数据整理、校验和打包，产出 `.strings` 后人工上传 translations.telegram.org 成为**自定义语言包**。
 
 当前维护范围：
-- iOS：继续维护。增量更新只需要重新下载官方英文 `en.strings` 和官方简中 `official-zh.strings`。
+- iOS：继续维护。增量更新只需重新下载官方英文 `en.strings`。
 - TDesktop：继续维护，和 iOS 独立处理。
 - macOS：停止维护，仅保留历史产物。
-- `zhcncc.strings`：冻结历史参考源；后续新增文案不会覆盖它，不再要求下载新版。
+- `official-zh.strings`、`zhcncc.strings` 与 `ref-*.strings`：保留本地参考，按需查阅，默认不进入待译输入。
 
 ---
 
@@ -32,15 +32,17 @@ tg-lang-refine/
 │   ├── 03-scripts.md         脚本参考手册
 │   ├── 04-data-format.md     中间产物格式定义
 │   ├── 05-troubleshooting.md 踩坑、白名单、已知限制
-│   └── SOURCES.md            三个源文件下载指引
+│   ├── 06-translation-style.md 共用术语与信达雅审校规范
+│   └── SOURCES.md            英文下载与参考查阅指引
 ├── scripts/                  Python 脚本 (零外部依赖)
 │   ├── _common.py               .strings 解析/序列化 + 路径约定
+│   ├── prepare_update.py        备份旧轮次并准备增量审校
 │   ├── parse_strings.py         .strings → JSON
-│   ├── merge.py                 三源按 key 对齐 → merged.json
+│   ├── merge.py                 建立全量英文基准 → merged.json
 │   ├── seed_ios_ref.py          历史 macOS 复用脚本 (macOS 已停止维护)
 │   ├── export_for_ai.py         merged.json → 翻译 AI 输入 (分片)
 │   ├── import_from_ai.py        校验 AI 回传 (全量 / 单片)
-│   ├── merge_parts.py           30 分片 → translated.json
+│   ├── merge_parts.py           本轮分片 + 未变译文 → translated.json
 │   ├── normalize.py             风格统一 (您→你, ...→…)
 │   ├── diff_report.py           审核用 HTML 报告
 │   └── build_strings.py         translated.json → .strings
@@ -48,13 +50,17 @@ tg-lang-refine/
 │   ├── raw/                  原始下载 (.strings, gitignore)
 │   └── parsed/               解析后 JSON (gitignore)
 ├── work/<platform>/          工作区 (gitignore)
+│   ├── history/ + update.json # 历史归档和来源记录
+│   ├── translated.reused.json # 原文未变译文
+│   ├── translation-memory.json # 旧英文与精修译文配对
 │   ├── merged.json
 │   ├── to-translate.json + to-translate.partNN.json
-│   ├── translated.partNN.json + translated.partNN.json.bak
-│   ├── translated.json
+│   ├── translated.partNN.json
+│   ├── translated.json + translated.json.bak
 │   ├── validation.json
 │   ├── normalize-report.md
-│   └── report.html
+│   ├── review.md              # 语义与一致性复核记录
+│   └── report.html + update-report.html
 └── dist/<platform>/          最终 .strings (gitignore)
 ```
 
@@ -72,6 +78,7 @@ tg-lang-refine/
 | 搞懂 merged.json / translated.json 字段 | `docs/04-data-format.md` |
 | 排查上传失败、占位符错位、54 条白名单等 | `docs/05-troubleshooting.md` |
 | 下载当前维护源文件 | `docs/SOURCES.md` |
+| 共用术语与信、达、雅审校要求 | `docs/06-translation-style.md` |
 | 用户视角的总览 | `README.md` |
 
 ---
@@ -83,7 +90,8 @@ tg-lang-refine/
 3. **翻译逻辑不进脚本**：本项目不调用任何翻译 API，审校由外部 AI 完成，脚本只做结构化 I/O。
 4. **接口稳定**：脚本 I/O 字段任何变更必须同步 `docs/04-data-format.md` 和 `docs/03-scripts.md`。
 5. **PROMPT.md 是合约**：`export_for_ai.py` 产出的 `PROMPT.md` 定义了翻译 AI 必须遵守的 source 标签和格式约定，改动须同步 `import_from_ai.py` 的校验规则。
-6. **规则单一来源**：只维护 `AGENTS.md`；`CLAUDE.md` 仅保留 `@AGENTS.md` 引用。
+6. **增量与质量**：更新前运行 `prepare_update.py` 归档；默认只复用英文未变且已通过结构校验的译文。所有新增、原文变化与定向修订均须先理解原文，再核对精修记忆，最后单独复核语义与一致性。模型升级不触发全量重译，实际问题决定审校范围。`translated.json` 是合并后的主文件；遵循 `docs/06-translation-style.md`。
+7. **规则单一来源**：只维护 `AGENTS.md`；`CLAUDE.md` 仅保留 `@AGENTS.md` 引用。
 
 ---
 
@@ -92,6 +100,6 @@ tg-lang-refine/
 - **新增平台支持（如 android）** → 扩展 `_common.py:PLATFORMS`，其他脚本自动适配
 - **新增 normalize 规则** → 改 `normalize.py:normalize()`，先 dry-run 评估规模
 - **AI 输出格式变更** → 改 `export_for_ai.py:PROMPT_TEMPLATE` + `import_from_ai.py:VALID_SOURCES`
-- **支持新参考源** → 下载命名 `ref-<name>.strings` 放 `data/<p>/raw/`，`merge.py` 自动识别
+- **查阅参考译文** → 在 `translation-memory.json` 或 `data/<p>/parsed/` 按相关 key 检索，记录依据；默认输入保持英文
 
 更详细的"怎么改"请进 `docs/03-scripts.md` 对应章节。
