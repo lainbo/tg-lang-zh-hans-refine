@@ -31,7 +31,7 @@ tg-lang-refine/
 │   ├── 02-workflow.md        完整操作流程 (iOS/TDesktop)
 │   ├── 03-scripts.md         脚本参考手册
 │   ├── 04-data-format.md     中间产物格式定义
-│   ├── 05-troubleshooting.md 踩坑、白名单、已知限制
+│   ├── 05-troubleshooting.md 故障排查与上传经验
 │   ├── 06-translation-style.md 共用术语与信达雅审校规范
 │   └── SOURCES.md            英文下载与参考查阅指引
 ├── scripts/                  Python 脚本 (零外部依赖)
@@ -76,7 +76,7 @@ tg-lang-refine/
 | 从 0 走一遍完整流程 | `docs/02-workflow.md` |
 | 查某个脚本参数 | `docs/03-scripts.md` |
 | 搞懂 merged.json / translated.json 字段 | `docs/04-data-format.md` |
-| 排查上传失败、占位符错位、54 条白名单等 | `docs/05-troubleshooting.md` |
+| 判断上传重试与停止条件、核对平台残留、排查占位符错位 | `docs/05-troubleshooting.md` |
 | 下载当前维护源文件 | `docs/SOURCES.md` |
 | 共用术语与信、达、雅审校要求 | `docs/06-translation-style.md` |
 | 用户视角的总览 | `README.md` |

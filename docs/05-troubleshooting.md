@@ -1,45 +1,55 @@
-# 05 · 踩坑、白名单、FAQ
+# 05 · 故障排查与上传经验
 
 ---
 
-## 安全保留 Key 白名单（54 条左右）
+## 上传停滞、反复提交与停止条件
 
-**现象**：上传 `.strings` 后 `Modified Phrases` 识别全量成功，但点 EDIT PHRASES 入库时剩余几十条死活入不进去，服务端返回：
-```json
-{"lang_keys":[],"repeat_lang_keys":[],"affected_cnt":0}
-```
-前端无限重试也不会成功。
+上传可能需要分几轮完成：文件已识别，点击 **EDIT PHRASES → EDIT ALL** 后先保存几百条，随后 `Processing` 停住；刷新页面后再次提交，有时还能继续写入。每轮可保存的数量不固定。可能涉及临时限流、请求中断或服务端批次处理，页面没有明确错误时，只记录实际现象，不直接认定原因。
 
-**原因**：Telegram 的 **anti-malicious-translation 机制**。涉及账号安全、反诈、法律条款的字符串被平台锁定，**任何自定义语言包都改不了，包括 API 方式**。
+### 遇到停滞时怎么做
 
-**已知被锁定的类别**（通过 iOS 实战确认）：
+1. 上传前先用 **Import/Export → EXPORT FILE** 导出当前线上包，保留可回滚备份。
+2. 上传对应平台的 `.strings`，记录 `Modified Phrases` 的数量，点击 **EDIT PHRASES → EDIT ALL**。文件上传完成只代表已解析，最终还要确认译文已经保存。
+3. 只要剩余数量仍在下降，就让当前提交继续。数量持续不变时刷新页面；页面仍保留待修改列表时，直接再次提交；列表消失或要求选文件时，重新上传**同一份成品**再提交。
+4. 每轮记录剩余数量与 key。仍有新增写入就继续；如网站明确提示限流或等待时间，按提示等待后再试。
+5. **同一批 key 连续两次刷新重试都没有变化，且重新导出的线上包也没有新增写入时，停止批量重传，转为核对残留。** 不以固定条数或必须归零为停止标准。
 
-| 类别 | 示例 key | 为什么锁 |
+### 最后剩下的条目可能是什么
+
+| 现象 | 可能原因或已知依据 | 处理 |
 |---|---|---|
-| 登录/账号安全 | `AUTH_REGION`, `Login.ResetAccountProtected.*`, `PUSH_AUTH_*`, `AuthCode.Alert` | 验证码/账号重置钓鱼攻击面 |
-| Scam/Fake 警告 | `Conversation.ScamWarning`, `ChannelInfo.FakeChannelWarning`, `UserInfo.ScamUserWarning` | 反诈提示被篡改 → 帮骗子洗白 |
-| 机器人权限 | `Conversation.ShareBot*`, `Conversation.SecretChatContextBotAlert` | 骗用户授权恶意 bot |
-| PSA 公告 | `Chat.PsaTooltip.psa`, `ChatList.PsaAlert.psa`, `Message.ForwardedPsa.psa` | CEO 官方声明立场 |
-| 支付免责 | `Checkout.LiabilityAlert`, `Checkout.PaymentLiabilityAlert` | 法律文本责任归属 |
-| 语言包元操作 | `ApplyLanguage.*`, `Settings.AppLanguage` | 切换语言包提示被篡改 → 诱导装恶意包 |
-| 端到端加密 | `EncryptionKey.Description` | 安全机制说明不能歪曲 |
-| 数据导入/Passport | `Passport.AcceptHelp`, `Conversation.ImportedMessageHint` | 隐私数据流向 |
-| 会话设备关联 | `AuthSessions.AddDevice*` | 账号被盗高危点 |
-| 礼物打赏敏感 | `Chat.GiftPurchaseOffer.*`, `Notification.StarGiftOffer.Offer` | 资金损失风险 |
+| 安全提示、反诈、权限确认、语言切换或固定链接持续无法写入 | 可能受平台保护；部分条目在详情中标记 `CRITICAL` | 对照历史记录，抽查少量代表条目；确认建议未被采用、导出也未改变后，记录为平台残留并停止重复提交 |
+| 单条提交后能看到自己的译文，但导出里仍没有 | 可能只保存为翻译建议，尚未成为实际采用的译文 | 以重新导出结果为准，不把建议提交成功计为已发布 |
+| 导出仍为英文，导入列表却不包含它，按完整 key 搜索显示 `No phrases found` | 网站当前可能没有可编辑条目，或该条目由平台固定处理；仅凭此现象无法确定具体机制 | 记录 key、英文内容和查询结果，保留本地译文，不反复重传整包 |
+| 普通界面文案残留，且不符合以上情形 | 仍需排查平台选错、源版本变化、占位符或格式问题 | 对照当前英文、本地校验与网站具体报错，定向修复；不要直接归入平台限制 |
 
-**处理**：放弃。这些会 fallback 到 base language 显示官方译文。
+历史残留常见类别与示例：
 
-**覆盖率上限**：iOS 实测 **11417/11471 ≈ 99.53%**。
+- 登录与安全：`AUTH_REGION`、`PUSH_AUTH_*`、`Login.ResetAccountProtected.*`、`AuthCode.Alert`。
+- 反诈与权限：`Conversation.ScamWarning`、`UserInfo.FakeUserWarning`、`Conversation.ShareBot*`。
+- 隐私、付款和语言切换：`Checkout.LiabilityAlert`、`Passport.AcceptHelp`、`ApplyLanguage.*`、`Settings.AppLanguage`。
+- 固定链接与平台声明：`Settings.PrivacyPolicy_URL`、`WebApp.TermsOfUse_URL`、`Chat.PsaTooltip.psa`。
 
----
+这些示例用于定位问题，具体 key 和数量会随版本变化。客户端对受限或缺失条目的回退显示需另行验收，不能从上传页直接确认。
 
-## 1000 条限流
+### 验收与记录
 
-**现象**：Import 时每提交 ~1000 条需刷新页面才能继续。
+保存上传前后导出，按 key 对比本地成品，将结果分成：实际新增或修改并保存、已有且一致、未导出、已导出但仍不同。英文与简中文件包含的复数分支可能不同，不能直接用英文总 key 数减去简中导出总数判断漏传；结合当前简中 key 集合与导入预览核对。
 
-**原因**：Telegram 平台对单次 batch import 有节流。不是 bug 也不是本项目的问题。
+**以实际导出核验为准。** 导出弹窗的 `100%`、侧栏“未译”数量、导入剩余数量可能采用不同口径。记录每轮剩余 key、最终差异、抽查依据和文件 SHA-256，明确哪些已发布、哪些仍未写入。原始导出与详细差异放在 `work/maintenance/`，该目录被 Git 忽略；可复用经验应写入本文档。
 
-**处理**：刷新页面继续，反复几次直到剩余一批卡住（通常就是上面那 54 条安全白名单），关掉页面。
+### 2026-09-28 实测，供以后快速对照
+
+| 平台 | 导入识别变更 | 实际保存变更 | 刷新重试后的固定残留 | 导出中与本地一致 | 导出中仍不同 |
+|---|---:|---:|---:|---:|---:|
+| iOS | 414 | 341 | 73 | 11,874 | 5 |
+| TDesktop | 336 | 299 | 37 | 8,287 | 0 |
+
+本次刷新后再次提交，固定残留未减少。浏览器未显示明确限流原因。抽查 iOS `AUTH_REGION`，页面标记 `CRITICAL`；单条提交后显示为翻译建议，重新导出仍未包含该 key。
+
+iOS 另有 5 个 key 在导出中保持英文，官方简中导出也同样为英文：`AppUpgrade.Running`、`Login.PhonePaidEmailText`、`PUSH_CHAT_PHOTO_EDITED`、`PUSH_CHAT_TITLE_EDITED`、`ProfileLevelInfo.MyDescriptionToday_1`。前两个按完整 key 搜索显示 `No phrases found`。这 5 条不在导入页的 73 条待修改清单中，需单独记录。
+
+当时两个平台的导出弹窗均显示 `100%`，侧栏分别还有 75、38 条未译。上述表格由实际导出逐条比较得到，不能把 73／37 当成以后版本的固定上限。原始记录位于本地 `work/maintenance/upload-2026-09-28/`，包含上传前后导出、`verification.json` 和可重复核验的 `verify_upload.py`；本节保留了无需本地工件也能使用的判断依据。
 
 ---
 
@@ -53,7 +63,7 @@
 2. **复数规则**：中文只有 `other` 一种形式，英文有 `one/other` 两种
    - base=zh-hans → 期待 `_other` 后缀 key（本项目数据对齐这个）
    - base=en → 期待 `_one` + `_other`，数据对不上会出 bug
-3. **安全白名单 fallback**：上面那 54 条锁定 key 会 fallback 到 base，选 zh-hans 显示官方简中，体验顺滑
+3. **缺失或受限文案回退**：选择 zh-hans 作为回退语言；具体条目的客户端显示需实际验收，不以历史固定数量判断覆盖率
 
 ---
 

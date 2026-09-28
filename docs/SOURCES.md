@@ -42,4 +42,4 @@ python3 scripts/prepare_update.py tdesktop --en ~/Downloads/tdesktop_en_VERSION.
 
 ## 上传回写
 
-审校完产出 `dist/<platform>/zh-Hans-custom.strings` 后，人工上传至自定义语言包的对应平台，核对后点击 **EDIT PHRASES** 入库，再在客户端检查实际效果。详细步骤见 [操作流程](02-workflow.md)。
+审校完产出 `dist/<platform>/zh-Hans-custom.strings` 后，人工上传至自定义语言包的对应平台，核对后点击 **EDIT PHRASES → EDIT ALL** 提交，导出线上结果与本地核对，再在客户端检查实际效果。上传停滞时可刷新重试；固定残留的停止条件与判断依据见 [上传经验](05-troubleshooting.md#上传停滞反复提交与停止条件)，详细步骤见 [操作流程](02-workflow.md)。

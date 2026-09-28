@@ -44,6 +44,8 @@ python3 scripts/build_strings.py ios
 
 校验失败会以非零状态退出；合并与打包均在写入前检查。打包完成后，人工上传至自定义语言包对应平台，并点击 **EDIT PHRASES** 入库。
 
+上传可能需要刷新并重复提交几轮。若同一批 key 连续两次重试及导出核验均无进展，应按 [上传停滞与残留判断](docs/05-troubleshooting.md#上传停滞反复提交与停止条件) 核对平台限制，保存差异后停止重复尝试；网站显示 `100%` 仍须导出核验。
+
 ## 从零初始化与文档
 
 首次准备英文源文件后，依次运行 `parse_strings.py`、`merge.py`、`export_for_ai.py --chunk 100`，然后逐片审校。完整步骤见 [操作流程](docs/02-workflow.md)。
