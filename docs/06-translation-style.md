@@ -36,6 +36,11 @@
 | Secret Chat | 私密聊天 | |
 | Suggested Post | 投稿 | 向频道提交、由管理员审核的帖子；Suggest a Post：投稿或提交投稿 |
 | Gram / Grams | Gram | 货币专名；中文数量表达使用同一形式 |
+| Money | 资金 | 钱包资金入口；Wallet 译为“钱包” |
+| Gram Earnings | Gram 收益 | 与钱包资金余额区分 |
+| Secret Phrase / Recovery Phrase | 助记词 | 钱包的 12 或 24 个单词恢复凭据；短信登录中的 Secret Phrase 按验证语境处理 |
+| Network Fee | 网络手续费 | 钱包链上转账费用 |
+| Comment | 备注 | 钱包转账附言；其他功能按语境翻译 |
 | Mini App | 迷你应用 | |
 | Quick Reply | 快捷回复 | |
 | Greeting Message | 问候消息 | 商业账号自动问候；与群组、频道的欢迎消息区分 |
