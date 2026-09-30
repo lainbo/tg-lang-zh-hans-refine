@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 from zoneinfo import ZoneInfo
 
-from _common import parse_strings, platform_dirs
+from _common import PLATFORMS, parse_resource, platform_dirs, resource_suffix
 from export_for_ai import main as export
 from import_from_ai import validate
 from merge import main as merge
@@ -29,9 +29,9 @@ def main(platform: str, en_path: Path, chunk: int) -> None:
     en_path = en_path.resolve()
     content = en_path.read_bytes()
     text = content.decode("utf-8-sig")
-    incoming = parse_strings(text)
+    incoming = parse_resource(text, platform)
     if not incoming:
-        raise SystemExit("下载文件为空或无法解析为 .strings。")
+        raise SystemExit(f"下载文件为空或无法解析为 {resource_suffix(platform)}。")
     if len(incoming.keys() & old.keys()) < len(old) / 2:
         raise SystemExit("新旧英文 key 重合不足一半，请检查下载的平台。")
 
@@ -45,7 +45,7 @@ def main(platform: str, en_path: Path, chunk: int) -> None:
         if path.is_file() and path.name != ".gitkeep":
             shutil.move(str(path), archive / "work" / path.name)
 
-    (dirs["raw"] / "en.strings").write_text(text, encoding="utf-8")
+    (dirs["raw"] / ("en" + resource_suffix(platform))).write_text(text, encoding="utf-8")
     parse(platform)
     merge(platform)
     baseline = json.loads((work / "merged.json").read_text(encoding="utf-8"))
@@ -76,7 +76,7 @@ def main(platform: str, en_path: Path, chunk: int) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("platform", choices=("ios", "tdesktop"))
+    parser.add_argument("platform", choices=PLATFORMS)
     parser.add_argument("--en", type=Path, required=True)
     parser.add_argument("--chunk", type=int, default=100)
     args = parser.parse_args()

@@ -43,5 +43,5 @@ def main(platform: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit("usage: merge_parts.py <ios|macos|tdesktop>")
+        raise SystemExit("usage: merge_parts.py <ios|macos|tdesktop|android>")
     main(sys.argv[1])

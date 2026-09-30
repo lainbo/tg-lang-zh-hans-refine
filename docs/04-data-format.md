@@ -33,6 +33,22 @@
 
 ---
 
+## 安卓 XML
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="YourPhone">你的电话号码</string>
+    <string name="CallAvailableIn">%1$d:%2$02d 后可请求语音来电</string>
+</resources>
+```
+
+原始英文为 `data/android/raw/en.xml`，本地参考也使用 `.xml`。支持 Telegram 官方导出的具名纯文本 `string`；复数分支以 key 后缀展开，每个分支单独保留。XML 实体由标准库处理，字符串转义沿用换行、引号与反斜杠规则，并输出转义单引号。重复 key、错误根元素或子元素会阻断解析。JSON 字段和分片命名与其他平台相同。
+
+语言元数据 `LanguageName`、`LanguageNameInEnglish` 和 `LanguageCode` 用于客户端识别语言，分别填写语言显示名、英文显示名和中文语言代码。日期格式字符串依据 Android `LocaleController` 的格式化调用审校，保留有效的日期模式。
+
+---
+
 ## `parsed/<name>.json`
 
 **产自**：`parse_strings.py`
@@ -88,7 +104,8 @@
 - AI 输出必须是**纯 JSON**，不用 markdown code fence 包裹
 - 顶层 key 必须与输入完全一致，不增不减
 - 每 entry 必须有 `final` 和 `source`，`note` 可选
-- 占位符必须保留（`%@`, `%1$@`, `%d`, `{xxx}` 等）
+- 占位符必须保留（`%@`, `%1$@`, `%d`, `%2$02d`, `{xxx}` 等）
+- 安卓服务消息的 `un1` / `un2` 等具名替换标记和输入状态的 `**oo**` 动画标记也校验数量与写法
 
 ---
 
@@ -117,7 +134,7 @@
 
 `source` 只记录实际来源，不代表质量高低。历史条目的来源和备注保留原意。
 
-**必需字段**：`final` 非空字符串、`source` 取值合法；`note` 存在时须为字符串。
+**必需字段**：`final` 为字符串，英文非空时译文必须非空；官方空串分支允许原样保留。`source` 取值合法；`note` 存在时须为字符串。
 
 ---
 
@@ -151,7 +168,7 @@
 - `missing_in_translated` — baseline 有但 AI 回传里没有
 - `extra_key_not_in_merged` — AI 回传多出来的 key
 - `not_object` — entry 不是 object
-- `missing_final` — `final` 字段缺失或空
+- `missing_final` — `final` 字段缺失、类型错误，或英文非空而译文为空
 - `invalid_source:<value>` — source 取值不在白名单
 - `placeholder_mismatch` — 占位符与英文不一致（含 `en_placeholders` / `zh_placeholders` diff 字段）
 
@@ -202,7 +219,7 @@ Markdown 格式的 diff 报告。结构：
 **产自**：`build_strings.py`
 **用途**：上传 translations.telegram.org 的最终产物。
 
-格式见本文档开头的 `.strings` 定义，按 key 字母序输出，不带注释。
+iOS、macOS 与 TDesktop 的格式见本文档开头的 `.strings` 定义；Android 输出 `dist/android/zh-Hans-custom.xml`。所有平台按 key 字母序输出，不带注释。
 
 ---
 
@@ -261,7 +278,7 @@ python3 scripts/build_strings.py ios
 }
 ```
 
-保存上一轮全部 key，包括本轮已删除的条目，供按需检索历史表达。它不参与合并和打包。原文未变的实际复用对象是 `translated.reused.json`；初译后可查此记忆核对术语和表达。
+保存上一轮全部 key，包括本轮已删除的条目，供按需检索历史表达。它不参与合并和打包。原文未变的实际复用对象是 `translated.reused.json`；翻译时可查此记忆核对术语和表达。
 
 ## `review.md`
 

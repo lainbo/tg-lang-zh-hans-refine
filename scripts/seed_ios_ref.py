@@ -4,8 +4,7 @@
 以英文原文为对齐维度, 构建 TM {en: final}, 反查 macOS 每个 key 的英文,
 命中则输出到 data/macos/raw/ref-ios-refined.strings。
 
-merge.py 会自动识别 ref-<name>.strings 并作为 refs.<name> 纳入,
-下游 AI 在 to-translate 里能看到这一列, 大概率直接 adopt。
+输出仅供按需查阅。采用前须结合 macOS 的 key、功能上下文、参数角色和格式审校。
 
 用法: python3 scripts/seed_ios_ref.py
 """

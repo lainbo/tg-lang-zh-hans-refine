@@ -1,10 +1,15 @@
-"""共用工具: .strings 解析/序列化, 路径约定。"""
+"""共用工具: .strings / 安卓 XML 解析与序列化, 路径约定。"""
 from __future__ import annotations
 import re
 import pathlib
+import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PLATFORMS = ("ios", "macos", "tdesktop")
+PLATFORMS = ("ios", "macos", "tdesktop", "android")
+
+
+def resource_suffix(platform: str) -> str:
+    return ".xml" if platform == "android" else ".strings"
 
 
 def platform_dirs(platform: str) -> dict[str, pathlib.Path]:
@@ -114,3 +119,30 @@ def dump_strings(data: dict[str, str]) -> str:
     for key in sorted(data.keys()):
         lines.append(f'"{_escape(key)}" = "{_escape(data[key])}";')
     return "\n".join(lines) + "\n"
+
+
+def parse_resource(text: str, platform: str) -> dict[str, str]:
+    if platform != "android":
+        return parse_strings(text)
+    root = ET.fromstring(text)
+    if root.tag != "resources":
+        raise ValueError("安卓语言文件必须以 <resources> 为根元素")
+    result: dict[str, str] = {}
+    for entry in root:
+        key = entry.get("name")
+        if entry.tag != "string" or not key or len(entry):
+            raise ValueError("安卓导出文件必须包含具名的纯文本 <string> 条目")
+        if key in result:
+            raise ValueError(f"重复安卓 key：{key}")
+        result[key] = _unescape(entry.text or "")
+    return result
+
+
+def dump_resource(data: dict[str, str], platform: str) -> str:
+    if platform != "android":
+        return dump_strings(data)
+    root = ET.Element("resources")
+    for key in sorted(data):
+        ET.SubElement(root, "string", name=key).text = _escape(data[key]).replace("'", "\\'")
+    ET.indent(root, space="    ")
+    return '<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(root, encoding="unicode", short_empty_elements=False) + "\n"

@@ -6,14 +6,13 @@ Telegram 简体中文语言包精修工具链。以当前官方英文、功能�
 
 ## 维护范围
 
-- iOS、TDesktop 独立更新，共用术语规范。
-- macOS 保留历史产物，停止维护。
+- Android、iOS、TDesktop、macOS 原生客户端独立更新，共用术语规范。
 - 日常更新只下载官方英文。官方简中和社区包保留本地文件，按具体疑点查阅。
 - 自己的精修译文作为翻译记忆。英文未变时稳定复用，发现错误或术语冲突时定向修订。
 
 ## 日常增量更新
 
-通过已登录的浏览器，在对应平台的官方英文页面导出 `.strings`，详见 [下载指引](docs/SOURCES.md)。将实际下载路径传给以下命令，**保留现有 raw 和 work，交给脚本先备份再替换**：
+通过已登录的浏览器，在对应平台的官方英文页面导出 `.strings`（安卓导出 `.xml`），详见 [下载指引](docs/SOURCES.md)。将实际下载路径传给以下命令，**保留现有 raw 和 work，交给脚本先备份再替换**：
 
 ```bash
 python3 scripts/prepare_update.py ios \
@@ -22,7 +21,7 @@ python3 scripts/prepare_update.py ios \
 
 脚本会把上一轮源文件、中间产物与成品归档到 `work/ios/history/<时间>/`，保存来源文件名和 SHA-256，比较新旧英文。新增与英文变化的条目只携带当前及变化前英文，写入 `to-translate.partNN.json`；其余已校验译文保留在 `translated.reused.json`。旧英文与精修译文另存为 `translation-memory.json`。每片默认 100 条。
 
-翻译 AI 阅读 `work/ios/PROMPT.md`，先根据英文和上下文初译，再查精修记忆核对表达，随后单独复核语义、格式与两平台一致性。逐片输出 `translated.partNN.json`，在 `review.md` 记录实际复核范围和疑点处理。每片完成后校验：
+翻译 AI 阅读 `work/ios/PROMPT.md`，先根据英文和上下文确定含义，核对精修记忆并复用适用译文，完成其余翻译，随后单独复核语义、格式与跨平台一致性。逐片输出 `translated.partNN.json`，在 `review.md` 记录实际复核范围和疑点处理。每片完成后校验：
 
 ```bash
 python3 scripts/import_from_ai.py ios --part 1
@@ -40,7 +39,7 @@ python3 scripts/diff_report.py ios --update
 python3 scripts/build_strings.py ios
 ```
 
-最终文件为 `dist/ios/zh-Hans-custom.strings`，本次审校报告为 `work/ios/update-report.html`，按新增、英文变化和既有修订展示原文及新旧译文。TDesktop 使用相同命令，把 `ios` 换为 `tdesktop`，并传入该平台的下载文件。
+最终文件为 `dist/ios/zh-Hans-custom.strings`，本次审校报告为 `work/ios/update-report.html`，按新增、英文变化和既有修订展示原文及新旧译文。Android、TDesktop 和 macOS 原生客户端使用相同命令，把 `ios` 换为 `android`、`tdesktop` 或 `macos`，并传入对应平台的下载文件。安卓首次源文件为 `data/android/raw/en.xml`，成品为 `dist/android/zh-Hans-custom.xml`。
 
 校验失败会以非零状态退出；合并与打包均在写入前检查。打包完成后，人工上传至自定义语言包对应平台，并点击 **EDIT PHRASES** 入库。
 
@@ -59,4 +58,4 @@ python3 scripts/build_strings.py ios
 
 源文件、工作区和成品均由 Git 忽略，需自行备份；每轮本地归档不能替代异地备份。
 
-端到端验证：`python3 tests/e2e_workflow.py`，结果保存在 `work/maintenance/e2e-result.json`。
+端到端验证：`python3 tests/e2e_workflow.py`；安卓使用 `python3 tests/e2e_workflow.py --platform android`。结果分别保存在 `work/maintenance/e2e-result.json` 与 `e2e-android-result.json`。

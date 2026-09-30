@@ -1,6 +1,7 @@
 # 原始下载 (体积大, 版权敏感)
 data/*/raw/*.strings
 data/*/raw/*.stringsdict
+data/*/raw/*.xml
 
 # 中间产物
 data/*/parsed/

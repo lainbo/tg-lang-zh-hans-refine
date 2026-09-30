@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""在临时项目中执行真实 CLI，验证增量、错误阻断和 .strings 往返。"""
+"""在临时项目中执行真实 CLI，验证增量、错误阻断和平台资源往返。"""
 from __future__ import annotations
+import argparse
 import json
 from pathlib import Path
 import shutil
@@ -10,10 +11,18 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'scripts'))
-from _common import dump_strings, parse_strings
+from _common import PLATFORMS, dump_resource, parse_resource, resource_suffix
 
 
-def main():
+def main(platform="ios"):
+    suffix = resource_suffix(platform)
+
+    def dump_strings(data):
+        return dump_resource(data, platform)
+
+    def parse_strings(text):
+        return parse_resource(text, platform)
+
     checks = []
     commands = []
 
@@ -26,10 +35,10 @@ def main():
         root = Path(tmp)
         shutil.copytree(ROOT / 'scripts', root / 'scripts', ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copytree(ROOT / 'docs', root / 'docs')
-        work = root / 'work/ios'
-        raw = root / 'data/ios/raw'
-        dist = root / 'dist/ios/zh-Hans-custom.strings'
-        for path in (work, raw, root / 'data/ios/parsed', dist.parent):
+        work = root / 'work' / platform
+        raw = root / 'data' / platform / 'raw'
+        dist = root / 'dist' / platform / ('zh-Hans-custom' + suffix)
+        for path in (work, raw, root / 'data' / platform / 'parsed', dist.parent):
             path.mkdir(parents=True, exist_ok=True)
 
         def write(path, data):
@@ -39,7 +48,7 @@ def main():
             return json.loads(path.read_text(encoding='utf-8'))
 
         def run(script, *args, ok=True):
-            proc = subprocess.run([sys.executable, str(root / 'scripts' / script), 'ios', *map(str, args)],
+            proc = subprocess.run([sys.executable, str(root / 'scripts' / script), platform, *map(str, args)],
                                   cwd=root, text=True, capture_output=True)
             commands.append({'script': script, 'args': [str(a).replace(str(root), '<fixture>') for a in args],
                              'returncode': proc.returncode,
@@ -47,33 +56,37 @@ def main():
             check(f'{script} {"通过" if ok else "阻断"} #{len(commands)}', (proc.returncode == 0) == ok)
 
         old = {'stable': '%@ has %d items.', 'changed': 'Old value', 'removed': 'Remove me',
-               'syntax': 'https://example.com/a // /* literal */ "quote"\nnext', 'space': ' '}
+               'syntax': 'https://example.com/a?q=x&b=y // /* literal */ <b>"quote"</b>\nnext', 'space': ' ', 'empty': ''}
         old_final = {'stable': '%@ 有 %d 个项目。', 'changed': '旧值', 'removed': '将删除',
-                     'syntax': 'https://example.com/a // /* literal */ "引号"\n下一行', 'space': ' '}
+                     'syntax': 'https://example.com/a?q=x&b=y // /* literal */ <b>"引号"</b>\n下一行', 'space': ' ', 'empty': ''}
+        if platform == 'android':
+            old.update(width='Call in %1$d:%2$02d', named='un1 added un2', animation='choosing **oo** sticker')
+            old_final.update(width='%1$d:%2$02d 后来电', named='un1 添加了 un2', animation='正在 **oo** 选择贴纸')
         write(work / 'merged.json', {k: {'en': v} for k, v in old.items()})
         write(work / 'translated.json', {k: {'final': v, 'source': 'fresh'} for k, v in old_final.items()})
         previous_translated = read(work / 'translated.json')
         previous_translated['stable'].update(source='adopt', note='adopt:历史精修')
         write(work / 'translated.json', previous_translated)
-        (raw / 'en.strings').write_text(dump_strings(old))
-        (raw / 'official-zh.strings').write_text(dump_strings(old_final))
-        (raw / 'zhcncc.strings').write_text(dump_strings({'changed': '社区旧译'}))
-        (raw / 'ref-current-refined.strings').write_text(dump_strings({'changed': '过期精修副本'}))
-        reference_bytes = {p.name: p.read_bytes() for p in raw.glob('*.strings') if p.name != 'en.strings'}
+        (raw / ('en' + suffix)).write_text(dump_strings(old))
+        (raw / ('official-zh' + suffix)).write_text(dump_strings(old_final))
+        (raw / ('zhcncc' + suffix)).write_text(dump_strings({'changed': '社区旧译'}))
+        (raw / ('ref-current-refined' + suffix)).write_text(dump_strings({'changed': '过期精修副本'}))
+        reference_bytes = {p.name: p.read_bytes() for p in raw.glob('*' + suffix) if p.name != ('en' + suffix)}
         dist.write_text(dump_strings(old_final))
         old_dist = dist.read_bytes()
         # 历史尾片应由归档隔离。
         write(work / 'translated.part99.json', {'removed': {'final': '旧片', 'source': 'fresh'}})
         new = {k: v for k, v in old.items() if k != 'removed'}
         new.update(changed='New value', added='Save %.2d%% for %1$@')
-        en = root / 'download-en.strings'
+        en = root / ('download-en' + suffix)
         en.write_text(dump_strings(new))
         run('prepare_update.py', '--en', en, '--chunk', 1)
         update = read(work / 'update.json')
         check('新增/变化/删除分类', update['added'] == ['added'] and update['changed'] == ['changed'] and update['removed'] == ['removed'])
         check('旧片归档', not (work / 'translated.part99.json').exists() and (work / update['archive'] / 'work/translated.part99.json').exists())
-        check('成品备份与原件完整', (work / update['archive'] / 'dist/zh-Hans-custom.strings').read_bytes() == old_dist == dist.read_bytes())
+        check('成品备份与原件完整', (work / update['archive'] / ('dist/zh-Hans-custom' + suffix)).read_bytes() == old_dist == dist.read_bytes())
         check('未变英文逐字复用', read(work / 'translated.reused.json')['stable']['final'] == old_final['stable'])
+        check('官方空串分支原样保留', read(work / 'translated.reused.json')['empty']['final'] == '')
         check('历史来源与备注保持原意', read(work / 'translated.reused.json')['stable'] == previous_translated['stable'])
         check('旧英文上下文', read(work / 'to-translate.json')['changed']['previous_en'] == 'Old value')
         check('默认基准只含英文', read(work / 'merged.json') == {k: {'en': v} for k, v in new.items()})
@@ -104,7 +117,7 @@ def main():
         run('build_strings.py')
         expected = {**old_final, 'changed': '你看到的新值…', 'added': '%1$@ 可节省 %.2d%%'}
         del expected['removed']
-        check('最终覆盖与 .strings 无损往返', parse_strings(dist.read_text()) == expected)
+        check(f'最终覆盖与 {suffix} 无损往返', parse_strings(dist.read_text()) == expected)
         check('单片与全量验证工件独立', (work / 'validation.part01.json').exists() and read(work / 'validation.json')['problem_count'] == 0)
         good_dist = dist.read_bytes()
         good_master = (work / 'translated.json').read_bytes()
@@ -123,6 +136,8 @@ def main():
             ('非法来源', lambda d: d['added'].update(source=[])),
             ('非法备注', lambda d: d['added'].update(note=3)),
             ('占位符丢失', lambda d: d['added'].update(final='%1$@ 节省 %%')),
+            ('格式宽度丢失', lambda d: d['width'].update(final='%1$d:%2$d 后来电'))
+            if platform == 'android' else ('重复占位符', lambda d: d['added'].update(final='%1$@ 节省 %.2d%% %1$@')),
             ('百分号转义丢失', lambda d: d['added'].update(final='%1$@ 节省 %.2d%')),
             ('无编号参数换序', lambda d: d['stable'].update(final='%d 个项目属于 %@')),
         ]:
@@ -132,6 +147,19 @@ def main():
             run('import_from_ai.py', ok=False)
             run('build_strings.py', ok=False)
             check(name + '阻断且保留成品', dist.read_bytes() == good_dist)
+        if platform == 'android':
+            invalid = json.loads(json.dumps(final))
+            invalid['named']['final'] = 'un1 添加了用户'
+            write(work / 'translated.json', invalid)
+            run('import_from_ai.py', ok=False)
+            run('build_strings.py', ok=False)
+            check('安卓具名替换标记丢失阻断', dist.read_bytes() == good_dist)
+            invalid = json.loads(json.dumps(final))
+            invalid['animation']['final'] = '正在选择贴纸'
+            write(work / 'translated.json', invalid)
+            run('import_from_ai.py', ok=False)
+            run('build_strings.py', ok=False)
+            check('安卓动画替换标记丢失阻断', dist.read_bytes() == good_dist)
         write(work / 'translated.json', [])
         run('import_from_ai.py', ok=False)
         run('build_strings.py', ok=False)
@@ -156,27 +184,41 @@ def main():
             write(work / part.name.replace('to-translate', 'translated'), {k: final[k] for k in read(part)})
         run('merge_parts.py')
         run('diff_report.py')
+        check('官方空串分支在报告中不标为缺译', '尚无译文' not in (work / 'report.html').read_text())
         run('build_strings.py')
         check('首次全量流程可打包', dist.read_bytes() == good_dist)
 
-        shutil.rmtree(root / 'data/ios/parsed')
+        shutil.rmtree(root / 'data' / platform / 'parsed')
         for name in reference_bytes:
             (raw / name).unlink()
         run('parse_strings.py')
         run('merge.py')
         run('prepare_update.py', '--en', en)
         check('只有英文源也能准备更新', read(work / 'to-translate.json') == {} and
-              list(raw.glob('*.strings')) == [raw / 'en.strings'])
+              list(raw.glob('*' + suffix)) == [raw / ('en' + suffix)])
         run('merge_parts.py')
         run('build_strings.py')
         check('无参考包更新保持成品一致', dist.read_bytes() == good_dist)
+        if platform == 'android':
+            parsed = root / 'data' / platform / 'parsed/en.json'
+            previous_parsed = parsed.read_bytes()
+            for text in ('<resources>', '<wrong/>',
+                         '<resources><string name="x">a</string><string name="x">b</string></resources>',
+                         '<resources><string name="x"><b>nested</b></string></resources>'):
+                (raw / ('en' + suffix)).write_text(text)
+                run('parse_strings.py', ok=False)
+                check('错误 XML 阻断且保留已解析基准', parsed.read_bytes() == previous_parsed)
+            (raw / ('en' + suffix)).write_text(dump_strings(new))
 
-    result = {'passed': True, 'check_count': len(checks), 'checks': checks, 'commands': commands}
-    output = ROOT / 'work/maintenance/e2e-result.json'
+    result = {'platform': platform, 'passed': True, 'check_count': len(checks), 'checks': checks, 'commands': commands}
+    filename = 'e2e-result.json' if platform == 'ios' else f'e2e-{platform}-result.json'
+    output = ROOT / 'work/maintenance' / filename
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     print(f'端到端验证通过：{len(checks)} 项检查；结果 → {output}')
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--platform', choices=PLATFORMS, default='ios')
+    main(parser.parse_args().platform)

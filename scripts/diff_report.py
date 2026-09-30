@@ -42,7 +42,7 @@ def main(platform: str, translated_name: str, update: bool = False) -> None:
         entry = merged[key]
         t = translated.get(key) or {}
         previous = memory.get(key, {})
-        if not t.get("final"):
+        if not isinstance(t.get("final"), str) or (not t["final"] and entry["en"]):
             kind = "missing"
         elif key in added:
             kind = "added"
@@ -104,7 +104,7 @@ h2 {{ border-bottom: 2px solid #333; padding-bottom: 4px; }}
 if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv:
-        raise SystemExit("usage: diff_report.py <ios|macos|tdesktop> [translated.json] [--update]")
+        raise SystemExit("usage: diff_report.py <ios|macos|tdesktop|android> [translated.json] [--update]")
     platform = argv[0]
     name = next((arg for arg in argv[1:] if arg != "--update"), "translated.json")
     main(platform, name, "--update" in argv)

@@ -1,6 +1,6 @@
 # 03 · 脚本参考手册
 
-所有脚本都在 `scripts/`，零外部依赖，`python3 scripts/<name>.py` 直接跑。`<platform>` 参数为 `ios`、`macos` 或 `tdesktop`。
+所有脚本都在 `scripts/`，零外部依赖，`python3 scripts/<name>.py` 直接跑。`<platform>` 参数为 `android`、`ios`、`macos` 或 `tdesktop`。
 
 执行顺序（正常链路）：
 
@@ -23,10 +23,12 @@ flowchart LR
 
 **导出：**
 - `ROOT` — 项目根目录 `Path`
-- `PLATFORMS = ("ios", "macos", "tdesktop")`
+- `PLATFORMS = ("ios", "macos", "tdesktop", "android")`
 - `platform_dirs(platform)` — 返回 `{raw, parsed, work, dist}` 四个 `Path`
 - `parse_strings(text)` — `.strings` 文本 → `dict[str, str]`
 - `dump_strings(data)` — `dict[str, str]` → `.strings` 文本（按 key 字母序输出）
+- `resource_suffix(platform)` — 安卓返回 `.xml`，其他平台返回 `.strings`
+- `parse_resource(text, platform)` / `dump_resource(data, platform)` — 按平台解析或序列化 XML / `.strings`，保持相同 key→value 结构
 
 **内部：**
 - `_STRING_RE` — Apple `.strings` 字符串正则
@@ -43,7 +45,7 @@ flowchart LR
 
 ## `prepare_update.py`
 
-日常增量入口；只用于已有完整译文的 iOS 与 TDesktop。
+日常增量入口；用于已有完整译文的 Android、iOS、TDesktop 与 macOS 原生客户端。
 
 ```bash
 python3 scripts/prepare_update.py ios --en /path/to/ios_en.strings [--chunk 100]
@@ -59,17 +61,17 @@ python3 scripts/prepare_update.py ios --en /path/to/ios_en.strings [--chunk 100]
 
 ## `parse_strings.py`
 
-**作用**：扫 `data/<p>/raw/*.strings` → `data/<p>/parsed/<stem>.json`
+**作用**：扫 `data/<p>/raw/*.strings`（安卓扫 `*.xml`）→ `data/<p>/parsed/<stem>.json`
 
 **用法**：
 ```bash
 python3 scripts/parse_strings.py ios
 ```
 
-**输入**：`data/<p>/raw/` 下任意数量 `.strings` 文件。
+**输入**：`data/<p>/raw/` 下任意数量对应平台的资源文件。安卓英文命名为 `en.xml`，其他平台为 `en.strings`。
 **输出**：同名 `.json`（key→value 字典），按 key 排序。
 
-**错误**：raw 为空时 `SystemExit`。
+**错误**：raw 为空时 `SystemExit`；安卓 XML 格式错误、根元素错误、重复 key 或非纯文本 `string` 时解析失败。
 
 ---
 
@@ -88,7 +90,7 @@ python3 scripts/merge.py ios
 
 ## `seed_ios_ref.py`
 
-历史 macOS 脚本，保留供历史数据追溯。它按英文匹配 iOS 精修译文，生成 `data/macos/raw/ref-ios-refined.strings`。macOS 已停止维护，当前维护流程不使用该脚本。
+按英文匹配 iOS 精修译文，生成 `data/macos/raw/ref-ios-refined.strings`，供按需查阅。采用前须核对 macOS 的功能上下文、参数角色与格式；默认待译输入保持英文。
 
 ---
 
@@ -129,7 +131,7 @@ python3 scripts/import_from_ai.py ios --part 1 custom.json     # 指定回传文
 **校验项**：
 1. **结构**：顶层为 object，每个 entry 是 `{final: str, source: str, note?: str}`
 2. **source 合法性**：四选一 `adopt / rewrite_ref / rewrite_official / fresh`，仅记录实际来源；英文独立翻译默认 `fresh`
-3. **final 非空字符串**（语言包中用于分隔或省略连接词的空白串可以保留）
+3. **final 必须为字符串**：英文非空时译文必须非空；官方空串分支允许原样保留。语言包中用于分隔或省略连接词的空白串可以保留。
 4. **占位符一致性**：数量、类型和写法必须相同，`%%` 也保留；无编号百分号参数必须保持顺序，带编号参数可调整顺序。
 5. **key 覆盖**：缺失 / 多余都报告
 
@@ -138,9 +140,11 @@ python3 scripts/import_from_ai.py ios --part 1 custom.json     # 指定回传文
 - `%d` / `%1$d` — 整数
 - `%s` / `%1$s` — C string
 - `%.2f` / `%1$.2f` — 浮点
-- `%.2d` — 格式化整数
+- `%.2d`、`%2$02d` — 含精度或宽度的格式化整数
 - `%%` — 字面量百分号
 - `{xxx}` — Telegram 自定义占位符（如 `{user}`）
+- `un1` / `un2` 等 — 安卓服务消息中的具名替换标记
+- `**oo**` — 安卓输入状态中的动画替换标记
 
 **错误**：全量输出 `validation.json`，单片输出 `validation.partNN.json`；问题数大于 0 时以状态码 1 退出。`note` 存在时必须为字符串。共享函数 `validate()` 也用于合并和打包门禁。
 
@@ -202,23 +206,23 @@ python3 scripts/diff_report.py ios [translated.json] [--update]
 
 **数据来源**：英文来自基准，旧英文与精修译文来自 `translation-memory.json`，变更分类来自 `update.json`。首次初始化没有历史数据时，显示全量文案。
 
-**分组**：尚无译文、新增文案、英文变化、既有文案审校和其他条目。仅显示有条目的组。所有本轮条目均需审校，`source` 仅作追溯，参考包不作为默认对照列。
+**分组**：尚无译文、新增文案、英文变化、既有文案审校和其他条目。仅显示有条目的组。官方英文与译文均为空的分支视为完整条目。所有本轮条目均需审校，`source` 仅作追溯，参考包不作为默认对照列。
 
 ---
 
 ## `build_strings.py`
 
-**作用**：把 `translated.json` 的 `final` 字段打包为 `.strings`。
+**作用**：把 `translated.json` 的 `final` 字段打包为 `.strings`（安卓为 `.xml`）。
 
 **用法**：
 ```bash
 python3 scripts/build_strings.py ios [translated.json]
 ```
 
-**输出**：`dist/<p>/zh-Hans-custom.strings`（按 key 字母序）
+**输出**：`dist/<p>/zh-Hans-custom.strings`；安卓为 `dist/android/zh-Hans-custom.xml`（按 key 字母序）
 
-**门禁**：每次打包都对当前英文重新校验 key 覆盖、结构和占位符；失败不会覆盖已有 `.strings`。
+**门禁**：每次打包都对当前英文重新校验 key 覆盖、结构和占位符；失败不会覆盖已有成品。
 
-**保证**：通过 `_common.dump_strings` 正确转义 `"` `\\` `\n` `\t` `\r`。已验证 `.strings → parse → build → parse` 往返一致。
+**保证**：通过 `_common.dump_resource` 选择平台格式并正确转义 `"` `\\` `\n` `\t` `\r`。XML 使用标准库序列化实体与属性。端到端测试验证 `.strings` 与 XML 的解析、构建和再解析结果一致。
 
 **下一步**：手动上传 translations.telegram.org。

@@ -44,12 +44,22 @@
 |---|---:|---:|---:|---:|---:|
 | iOS | 414 | 341 | 73 | 11,874 | 5 |
 | TDesktop | 336 | 299 | 37 | 8,287 | 0 |
+| macOS | 3,391 | 3,350 | 42 | 8,287 | 2 |
 
 本次刷新后再次提交，固定残留未减少。浏览器未显示明确限流原因。抽查 iOS `AUTH_REGION`，页面标记 `CRITICAL`；单条提交后显示为翻译建议，重新导出仍未包含该 key。
 
 iOS 另有 5 个 key 在导出中保持英文，官方简中导出也同样为英文：`AppUpgrade.Running`、`Login.PhonePaidEmailText`、`PUSH_CHAT_PHOTO_EDITED`、`PUSH_CHAT_TITLE_EDITED`、`ProfileLevelInfo.MyDescriptionToday_1`。前两个按完整 key 搜索显示 `No phrases found`。这 5 条不在导入页的 73 条待修改清单中，需单独记录。
 
 当时两个平台的导出弹窗均显示 `100%`，侧栏分别还有 75、38 条未译。上述表格由实际导出逐条比较得到，不能把 73／37 当成以后版本的固定上限。原始记录位于本地 `work/maintenance/upload-2026-09-28/`，包含上传前后导出、`verification.json` 和可重复核验的 `verify_upload.py`；本节保留了无需本地工件也能使用的判断依据。
+
+macOS 实际新增 361 条、更新 2,989 条。最后 42 条经过连续两次刷新重试，key 集合和线上导出均保持不变；抽查 `ChannelInfo.ScamWarning` 标记为 `CRITICAL`，表单只有提交建议的 `SUBMIT`。导出弹窗显示 `100%`，侧栏仍显示 44 条未译。原始导出、残留清单和核验脚本位于 `work/maintenance/upload-macos-2026-09-28/`。
+
+macOS 还遇到两类需要单条处理的导入差异：
+
+- **同名普通字符串与复数词条同时存在**：官方英文导出同时含 `Star.Auction.Preview.TopBidders` 的完整旧句和 `_other` 等复数分支；网页当前编辑的是 `top %d bidders`。上传文件省略无后缀旧句，单独应用 `_other` 的译文后，导出已正确包含中文。无后缀旧句在官方简中和自定义包中仍保留英文。
+- **空译文被批量导入忽略**：`Chat.Title.Topics_other` 的当前英文为空，批量上传后仍导出已有的“话题”。在详情中清空译文并点击 `SUBMIT AND APPLY`，导出才与本地空值一致。这次单条修正不计入最初的 3,391 条导入变更。
+
+另一条仍为英文的导出项是 `StoryPrivacy.GrayList_Main`，按完整 key 搜索显示 `No phrases found`，官方简中导出也保持英文。两条英文导出差异均已单独记录，不能和 42 条导入残留混算。
 
 ---
 

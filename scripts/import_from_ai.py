@@ -27,7 +27,7 @@ from _common import platform_dirs
 VALID_SOURCES = {"adopt", "rewrite_ref", "rewrite_official", "fresh"}
 
 # 占位符: Apple %@ / %1$@ / %d / %1$d / %s / %1$s / %1$.2f 等
-_PLACEHOLDER_RE = re.compile(r"%%|%(?:\d+\$)?(?:\.\d+)?[@dsif]|\{[^{}]+\}")
+_PLACEHOLDER_RE = re.compile(r"%%|%(?:\d+\$)?\d*(?:\.\d+)?[@dsif]|\{[^{}]+\}|\bun\d+\b|\*\*oo\*\*")
 
 
 def placeholders(s: str) -> list[str]:
@@ -53,14 +53,14 @@ def validate(merged: dict, translated: dict) -> list[dict]:
             continue
         final = entry.get("final")
         source = entry.get("source")
-        if not isinstance(final, str) or not final:
+        en = merged[key]["en"]
+        if not isinstance(final, str) or (not final and en):
             problems.append({"key": key, "issue": "missing_final"})
             continue
         if not isinstance(source, str) or source not in VALID_SOURCES:
             problems.append({"key": key, "issue": f"invalid_source:{source}"})
         if "note" in entry and not isinstance(entry["note"], str):
             problems.append({"key": key, "issue": "invalid_note"})
-        en = merged[key]["en"]
         en_ph = placeholders(en)
         zh_ph = placeholders(final)
         if en_ph != zh_ph:
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     argv = sys.argv[1:]
     if not argv:
         raise SystemExit(
-            "usage: import_from_ai.py <ios|macos|tdesktop> [--part N] [translated-file.json]"
+            "usage: import_from_ai.py <ios|macos|tdesktop|android> [--part N] [translated-file.json]"
         )
     platform = argv[0]
     part: int | None = None
