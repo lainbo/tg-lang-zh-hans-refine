@@ -57,5 +57,3 @@ python3 scripts/build_strings.py ios
 模型升级后继续遵循相同的审校标准，按实际问题决定修订范围。
 
 源文件、工作区和成品均由 Git 忽略，需自行备份；每轮本地归档不能替代异地备份。
-
-端到端验证：`python3 tests/e2e_workflow.py`；安卓使用 `python3 tests/e2e_workflow.py --platform android`。结果分别保存在 `work/maintenance/e2e-result.json` 与 `e2e-android-result.json`。
