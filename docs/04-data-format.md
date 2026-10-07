@@ -262,6 +262,8 @@ python3 scripts/build_strings.py ios
 
 `added`、`changed`、`removed` 是 key 列表；示例数量仅展示字段。`archive` 相对当前平台 work 目录，内含旧 `raw/`、`parsed/`、`work/` 与 `dist/`。`reviewed_existing` 为可选字段，记录本轮额外审校的既有 key（如术语修订）；相应条目须从复用集合移入待审校集合，更新 `reused_count`。
 
+任务结束后，归档中的下载原件及复制件按 [下载资源清理规则](../AGENTS.md#维护铁律) 删除，`raw/` 可为空；旧英文和参考内容保留在 `parsed/` 及 `work/merged.json` 中。
+
 `translated.reused.json` 与 `translated.json` 使用相同条目结构，只包含未进入本轮审校的译文。其 key 与审校 key 不得重叠，二者并集必须覆盖当前 `merged.json`。
 
 

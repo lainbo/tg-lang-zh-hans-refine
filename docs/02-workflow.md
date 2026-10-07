@@ -8,7 +8,7 @@
 
 ### 2. 备份并准备增量
 
-保留旧 `merged.json`、`translated.json` 和 raw 源文件，使用实际下载路径：
+保留旧 `merged.json`、`translated.json`、parsed 数据与成品，使用实际下载路径：
 
 ```bash
 python3 scripts/prepare_update.py ios \
@@ -18,7 +18,7 @@ python3 scripts/prepare_update.py ios \
 
 输出：
 
-- `history/<时间>/`：旧 raw、parsed、work 文件与 dist 的完整归档。
+- `history/<时间>/`：旧 raw、parsed、work 文件与 dist 的归档；其中的下载原件及复制件在任务结束时清理。
 - `merged.json`：当前全量英文。
 - `update.json`：英文来源文件名、SHA-256、备份位置、新增/变化/删除 key 与复用数量。
 - `translated.reused.json`：原文未变的已校验译文。
@@ -77,7 +77,7 @@ python3 scripts/build_strings.py ios
 
 ### 5. 人工上传
 
-1. 进入自定义语言包对应平台页面，先导出当前线上包作为备份。
+1. 进入自定义语言包对应平台页面，先导出当前线上包，解析为 key/value JSON 保存可回滚备份，并记录导出版本与 SHA-256。
 2. 点击 **Import phrases**，选择对应 `dist/<platform>/zh-Hans-custom.strings`。
 3. 核对识别结果，点击 **EDIT PHRASES → EDIT ALL** 提交，观察剩余数量。
 4. 若只保存了一部分后停住，刷新页面继续提交；需要重新选文件时，重传同一份成品。每轮记录剩余 key，有新增写入就继续。
@@ -89,6 +89,10 @@ python3 scripts/build_strings.py ios
 
 Android、TDesktop 和 macOS 原生客户端按同样步骤独立更新，命令中的 `ios` 改为 `android`、`tdesktop` 或 `macos`，下载文件也必须属于对应平台。安卓构建成品为 `dist/android/zh-Hans-custom.xml`。
 
+### 6. 清理下载资源
+
+每次任务结束都执行 [下载资源清理规则](../AGENTS.md#维护铁律)，包括仅检查更新且没有新增或变化的情况。确认来源记录、英文基准、所需参考数据、译文及回滚备份已保存后，删除下载原件和项目、历史归档中的复制件，再核对清理结果。`prepare_update.py` 与 `parse_strings.py` 不会自动完成这一步。
+
 ## 首次初始化
 
 从零开始时，只需将英文放入 `data/<platform>/raw/en.strings`（安卓为 `en.xml`），然后：
@@ -99,10 +103,10 @@ python3 scripts/merge.py ios
 python3 scripts/export_for_ai.py ios --chunk 100
 ```
 
-已有官方简中和参考包可以保留，默认输入只导出英文。首次没有本项目翻译记忆，按上述第 3～5 步完成全量翻译和审校；以后使用 `prepare_update.py` 增量维护。
+已有官方简中和参考包的解析 JSON 可以保留，默认输入只导出英文。首次没有本项目翻译记忆，按上述第 3～6 步完成全量翻译、审校和清理；以后使用 `prepare_update.py` 增量维护。
 
 ## 恢复备份
 
 单次规范化可复制 `translated.json.bak` 回 `translated.json` 后重新校验和打包。
 
-整轮回滚时，先另存当前状态，再将 `update.json` 所指归档内的 raw、parsed、work、dist 分别恢复到对应平台目录。不要混用不同轮次的英文基准和最终译文。
+整轮回滚时，先另存当前状态，再将 `update.json` 所指归档内的 parsed、work、dist 分别恢复到对应平台目录。raw 中的下载资源已在任务结束时清理，英文基准以归档的 `parsed/en.json` 与 `work/merged.json` 为准。不要混用不同轮次的英文基准和最终译文。

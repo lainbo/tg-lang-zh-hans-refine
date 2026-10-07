@@ -57,6 +57,8 @@ python3 scripts/prepare_update.py ios --en /path/to/ios_en.strings [--chunk 100]
 
 参数 `--chunk` 必须为正整数。来源文件名与 SHA-256 写入 `update.json`，历史保存在 `work/<p>/history/<时间>/`。旧英文与译文缺失或不匹配、新源为空、误下载其他平台时停止。
 
+脚本保留下载输入及安装到 raw 的资源，供本轮工作使用；任务结束时由维护者按 [下载资源清理规则](../AGENTS.md#维护铁律) 清理原件和复制件。下一轮使用保存的 `merged.json`、`translated.json` 与新下载的英文准备增量。
+
 ---
 
 ## `parse_strings.py`
