@@ -211,6 +211,34 @@ Android 和 iOS 的残留清单经过两次刷新重试均未改变。TDesktop �
 
 ---
 
+### 2026-11-15 四平台增量发布
+
+官方英文版本为 Android `v61669501`、iOS `v22594704`、TDesktop `v6047144`、macOS `v2433756`。本轮审校新增 1,693 个资源、原文变化 42 个，按中文实际使用的复数分支计为 1,489 个有效词条；Android 另有 1 个资源已从官方英文移除。上传前复核修正 5 条：iOS 2 条法币估值括号改为全角，macOS 3 条无障碍朗读标签改为与同组一致的写法。
+
+四平台均按 [上传文件只保留中文使用的复数分支](#上传文件只保留中文使用的复数分支) 生成上传文件。上传前导出线上包作为回滚备份，上传后重新导出逐条核验。
+
+| 平台 | 本轮审校资源（含复数） | 本轮中文有效词条 | 导入识别修改 | 实际保存 | 本轮已有且一致 | 保存后导入残留 |
+|---|---:|---:|---:|---:|---:|---:|
+| Android | 113 | 103 | 170 | 98 | 5 | 72 |
+| iOS | 457 | 382 | 456 | 381 | 1 | 75 |
+| TDesktop | 239 | 189 | 221 | 184 | 5 | 37 |
+| macOS | 926 | 815 | 856 | 814 | 1 | 42 |
+
+本轮中文有效词条全部与本地成品一致，未生效 0 条；本轮之外的既有资源没有变化，也没有新增缺失。iOS 新增 374 条、修改 7 条；TDesktop 新增 177 条、修改 7 条；macOS 新增 808 条、修改 6 条。Android 上传前导出已含基础语言回退：66 条导出内容改为本轮译文，32 条回退内容与精修译文相同、本轮作为自定义译文保存。`StoryPrivacyGroupAddContacts`、`StoryPrivacyGroupNonContacts` 的 10 个非 `other` 分支随之导出为新的 `other` 译文；导出中全部非 `other` 分支均等于对应的 `other` 译文。
+
+各平台残留清单经过两次刷新重试均未改变，数量与上一轮相同。Android 46 条中文有效资源差异未变。iOS 导出中仍不同的 6 条为 4 条英文导出（`AppUpgrade.Running`、`Login.PhonePaidEmailText`、`PUSH_CHAT_PHOTO_EDITED`、`PUSH_CHAT_TITLE_EDITED`）和 2 条礼物出价拒绝确认旧译；上传文件不含中文不用的分支，`ProfileLevelInfo.MyDescriptionToday_1` 不再计入比较。macOS 仍有 `StoryPrivacy.GrayList_Main` 导出为英文；TDesktop 上传文件中已导出的词条全部一致。侧栏未译数为 Android 85、iOS 82、TDesktop 47、macOS 52，与导入残留口径不同，验收以导出逐条比较为准。
+
+| 平台 | 上传前版本 | 上传前导出 SHA-256 | 最终线上版本 | 最终导出 SHA-256 |
+|---|---|---|---|---|
+| Android | `v61638730` | `5a22625a6305e4442cd203a470b4810715e39daa774d3f719cbdd881d06da55d` | `v61837157` | `3e35e19cc873d8545732fdbba49d28555f97df8be487084b8100416bc0b13837` |
+| iOS | `v22594703` | `9eefbd8f6318e51b7097e61abebdf3df1fb9e54545a47e58078bcfa29486da54` | `v22612066` | `6edfdc34cc38d7aadffb10fcd36fd8fe3d0df7f3b6f1f2bd46f3e4519eaf98d0` |
+| TDesktop | `v5959242` | `760f6daed8dc38a53f5495f9c3bfa17df69db509d9c5899a3b5829ee37234417` | `v6161776` | `5c3485f74629959dd4e2caf2fddf1459a6ec27c38dd366cde74465f88113fa4f` |
+| macOS | `v2391307` | `88409831480c32a6b2caabb112738a6ab65346eb94dfb445f1048f21bf9e56a3` | `v2440866` | `bf185efe5aa5049355a787279272bb7fedcfd4e688ef7bc0d8d03d2459740de6` |
+
+业务备份保存在本轮各平台历史归档的 `online-before-upload.json`。macOS `VoiceOver.Common.Live`（“实况”）的使用场景尚未确认，需在客户端核对。应用链接仍为 [简体中文（精修版）](https://t.me/setlanguage/zhcn1ainbo)，实际客户端显示仍待验收。上传前后的下载原件均已清理。
+
+---
+
 ## Base Language 选择
 
 **必须选 Simplified Chinese (zh-hans)，不要选 English**。原因：
