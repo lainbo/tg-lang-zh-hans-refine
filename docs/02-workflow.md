@@ -73,12 +73,12 @@ python3 scripts/build_strings.py ios
 
 合并后以 `translated.json` 为主文件。`normalize` 直接修改它，并创建 `translated.json.bak`。后续人工修订也修改主文件，然后重新校验、生成报告并打包；不要重新合并旧片覆盖这些修改。
 
-结构校验和语义审校均完成后，最终文件为 `dist/ios/zh-Hans-custom.strings`。本轮报告 `update-report.html` 按新增、英文变化和既有修订分组，展示当前英文、变化前英文、旧精修译文和最终译文；全量审查打开 `report.html`。
+结构校验和语义审校均完成后，完整成品为 `dist/ios/zh-Hans-custom.strings`，上传文件为 `dist/ios/zh-Hans-custom.upload.strings`。本轮报告 `update-report.html` 按新增、英文变化和既有修订分组，展示当前英文、变化前英文、旧精修译文和最终译文；全量审查打开 `report.html`。
 
 ### 5. 人工上传
 
 1. 进入自定义语言包对应平台页面，先导出当前线上包，解析为 key/value JSON 保存可回滚备份，并记录导出版本与 SHA-256。
-2. 点击 **Import phrases**，选择对应 `dist/<platform>/zh-Hans-custom.strings`。
+2. 点击 **Import phrases**，选择打包时生成的上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`）。直接上传含全部复数分支的完整成品会清空线上已有的中文复数译文，原因见 [上传文件只保留中文使用的复数分支](05-troubleshooting.md#上传文件只保留中文使用的复数分支)。
 3. 核对识别结果，点击 **EDIT PHRASES → EDIT ALL** 提交，观察剩余数量。
 4. 若只保存了一部分后停住，刷新页面继续提交；需要重新选文件时，重传同一份成品。每轮记录剩余 key，有新增写入就继续。
 5. 同一批 key 连续两次刷新重试均无变化，且导出也无新增写入时，停止批量重传，按 [上传停滞与残留判断](05-troubleshooting.md#上传停滞反复提交与停止条件) 核对平台保护、建议未采用或没有可编辑条目等情况。
@@ -87,7 +87,7 @@ python3 scripts/build_strings.py ios
 
 上传可能需要多轮；临时停滞的原因应根据网站提示判断。固定残留不必靠反复重传追求归零，本地校验也不能替代线上导出与客户端验收。
 
-Android、TDesktop 和 macOS 原生客户端按同样步骤独立更新，命令中的 `ios` 改为 `android`、`tdesktop` 或 `macos`，下载文件也必须属于对应平台。安卓构建成品为 `dist/android/zh-Hans-custom.xml`。
+Android、TDesktop 和 macOS 原生客户端按同样步骤独立更新，命令中的 `ios` 改为 `android`、`tdesktop` 或 `macos`，下载文件也必须属于对应平台。安卓构建成品为 `dist/android/zh-Hans-custom.xml`，上传文件为 `dist/android/zh-Hans-custom.upload.xml`。
 
 ### 6. 清理下载资源
 

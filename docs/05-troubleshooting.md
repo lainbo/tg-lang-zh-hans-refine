@@ -9,10 +9,16 @@
 ### 遇到停滞时怎么做
 
 1. 上传前先用 **Import/Export → EXPORT FILE** 导出当前线上包，解析为 key/value JSON 保存可回滚备份，记录来源版本和 SHA-256。
-2. 上传对应平台的 `.strings` 或 Android `.xml`，记录 `Modified Phrases` 的数量，点击 **EDIT PHRASES → EDIT ALL**。文件上传完成只代表已解析，最终还要确认译文已经保存。
+2. 上传 `build_strings.py` 生成的上传文件（`dist/<platform>/zh-Hans-custom.upload.strings`，安卓为 `.upload.xml`），记录 `Modified Phrases` 的数量，点击 **EDIT PHRASES → EDIT ALL**。文件上传完成只代表已解析，最终还要确认译文已经保存。
 3. 只要剩余数量仍在下降，就让当前提交继续。数量持续不变时刷新页面；页面仍保留待修改列表时，直接再次提交；列表消失或要求选文件时，重新上传**同一份成品**再提交。
 4. 每轮记录剩余数量与 key。仍有新增写入就继续；如网站明确提示限流或等待时间，按提示等待后再试。
 5. **同一批 key 连续两次刷新重试都没有变化，且重新导出的线上包也没有新增写入时，停止批量重传，转为核对残留。** 不以固定条数或必须归零为停止标准。
+
+### 上传文件只保留中文使用的复数分支
+
+完整成品 `dist/<platform>/zh-Hans-custom.strings` 保留官方英文的全部复数分支，网站上的简中语言包每个复数词条只启用一个分支：Android 与 macOS 为 `_other`，iOS 为 `_any`，TDesktop 为 `#other`。`build_strings.py` 每次打包时同时生成 `zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`），删除中文不用的分支，macOS 另外省略无后缀的 `Star.Auction.Preview.TopBidders`。上传时只选这份文件，删除规则见 [`build_strings.py`](03-scripts.md#build_stringspy)。
+
+2026-11-15 直接导入完整成品时，Android 预览识别 881 条修改，iOS 识别 1,175 条。多出的约 700 条都是中文使用的复数分支：左侧为线上精修译文，右侧为 `<no value>`，提交会清空这些译文。用 Android 单个词条测试，只含 `ChatsSelected_other` 的文件提示 `All phrases are synchronized`；含全部六个分支的文件显示 `other` 变为 `<no value>`。改用过滤后的文件后，Android、iOS 分别识别 170、456 条，均为预期修改。预览出现大量 `<no value>` 时，取消 **EDIT ALL** 确认框，先检查上传文件的复数分支。
 
 ### 最后剩下的条目可能是什么
 

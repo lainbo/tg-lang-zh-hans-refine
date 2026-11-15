@@ -62,7 +62,7 @@ tg-lang-refine/
 │   ├── normalize-report.md
 │   ├── review.md              # 语义与一致性复核记录
 │   └── report.html + update-report.html
-└── dist/<platform>/          最终 .strings / .xml (gitignore)
+└── dist/<platform>/          完整成品与上传文件 .strings / .xml (gitignore)
 ```
 
 `<platform>` ∈ {`android`, `ios`, `macos`, `tdesktop`}。

@@ -214,17 +214,27 @@ python3 scripts/diff_report.py ios [translated.json] [--update]
 
 ## `build_strings.py`
 
-**作用**：把 `translated.json` 的 `final` 字段打包为 `.strings`（安卓为 `.xml`）。
+**作用**：把 `translated.json` 的 `final` 字段打包为 `.strings`（安卓为 `.xml`），同时生成只含中文复数分支的上传文件。
 
 **用法**：
 ```bash
 python3 scripts/build_strings.py ios [translated.json]
 ```
 
-**输出**：`dist/<p>/zh-Hans-custom.strings`；安卓为 `dist/android/zh-Hans-custom.xml`（按 key 字母序）
+**输出**（均按 key 字母序）：
+- `dist/<p>/zh-Hans-custom.strings`：完整成品，保留全部 key 与复数分支；安卓为 `dist/android/zh-Hans-custom.xml`。
+- `dist/<p>/zh-Hans-custom.upload.strings`：上传文件；安卓为 `dist/android/zh-Hans-custom.upload.xml`。对应的中文分支存在时，删除其余复数分支：
+
+  | 平台 | 保留 | 删除 |
+  |---|---|---|
+  | Android、macOS | `_other` | `_zero`、`_one`、`_two`、`_few`、`_many` |
+  | iOS | `_any` | `_0`、`_1`、`_2`、`_3_10`、`_many` |
+  | TDesktop | `#other` | `#zero`、`#one`、`#two`、`#few`、`#many` |
+
+  macOS 另外删除无后缀的 `Star.Auction.Preview.TopBidders`。规则定义在 `UPLOAD_PLURAL` 与 `UPLOAD_EXCLUDE`，原因见 [上传文件只保留中文使用的复数分支](05-troubleshooting.md#上传文件只保留中文使用的复数分支)。
 
 **门禁**：每次打包都对当前英文重新校验 key 覆盖、结构和占位符；失败不会覆盖已有成品。
 
 **保证**：通过 `_common.dump_resource` 选择平台格式并正确转义 `"` `\\` `\n` `\t` `\r`。XML 使用标准库序列化实体与属性。端到端测试验证 `.strings` 与 XML 的解析、构建和再解析结果一致。
 
-**下一步**：手动上传 translations.telegram.org。
+**下一步**：将上传文件手动上传至 translations.telegram.org。

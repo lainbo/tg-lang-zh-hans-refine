@@ -217,9 +217,18 @@ Markdown 格式的 diff 报告。结构：
 ## `dist/<platform>/zh-Hans-custom.strings`
 
 **产自**：`build_strings.py`
-**用途**：上传 translations.telegram.org 的最终产物。
+**用途**：完整成品，包含 `translated.json` 的全部 key 与复数分支，用于再解析核对和留档。
 
 iOS、macOS 与 TDesktop 的格式见本文档开头的 `.strings` 定义；Android 输出 `dist/android/zh-Hans-custom.xml`。所有平台按 key 字母序输出，不带注释。
+
+---
+
+## `dist/<platform>/zh-Hans-custom.upload.strings`
+
+**产自**：`build_strings.py`
+**用途**：上传 translations.telegram.org 的文件。
+
+格式与完整成品相同，Android 为 `dist/android/zh-Hans-custom.upload.xml`。内容是完整成品的子集：每个复数词条只保留中文使用的分支，macOS 另外省略无后缀的 `Star.Auction.Preview.TopBidders`，保留的值与完整成品一致。删除规则见 [`build_strings.py`](03-scripts.md#build_stringspy)。
 
 ---
 
