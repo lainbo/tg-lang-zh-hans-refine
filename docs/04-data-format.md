@@ -356,6 +356,15 @@ python3 scripts/build_strings.py ios
 
 任务结束后，归档中的下载原件及复制件按 [下载资源清理规则](../AGENTS.md#维护铁律) 删除，`raw/` 可为空；旧英文和参考内容保留在 `parsed/` 及 `work/merged.json` 中。
 
+`upload.py` 首次提交前在 `archive` 目录写入 `online-before-upload.json`：上传前线上导出的 key→value 对象，按导出顺序，两空格缩进、保留中文原文。它是线上回滚备份，本轮已存在时不覆盖：
+
+```json
+{
+  "PUSH_MESSAGE_TEXT": "%1$@|%2$@",
+  "PUSH_MESSAGE_NOTEXT": "%1$@|新消息"
+}
+```
+
 `translated.reused.json` 与 `translated.json` 使用相同条目结构，只包含未进入本轮审校的译文。其 key 与审校 key 不得重叠，二者并集必须覆盖当前 `merged.json`。
 
 

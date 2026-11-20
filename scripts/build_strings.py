@@ -53,7 +53,7 @@ def main(platform: str, translated_name: str) -> None:
     upload_out.write_text(dump_resource(upload, platform), encoding="utf-8")
     print(f"打包 {len(final)} 条 → {out}")
     print(f"上传文件 {len(upload)} 条 → {upload_out}")
-    print("上传方式: translations.telegram.org 自定义语言包页面 → Import，选择上传文件")
+    print(f"上传: python3 scripts/upload.py {platform}")
 
 
 if __name__ == "__main__":

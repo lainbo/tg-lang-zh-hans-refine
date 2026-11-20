@@ -1,11 +1,14 @@
-"""共用工具: .strings / 安卓 XML 解析与序列化, 路径约定。"""
+"""共用工具: .strings / 安卓 XML 解析与序列化, 路径约定, 语言包导出下载。"""
 from __future__ import annotations
 import re
 import pathlib
+import urllib.request
 import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PLATFORMS = ("ios", "macos", "tdesktop", "android")
+SITE = "https://translations.telegram.org"
+CUSTOM_LANG = "zhcn1ainbo"
 
 # 各平台复数后缀：(中文上传保留分支, 其余复数分支)
 PLURAL_SUFFIXES: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -41,6 +44,16 @@ def placeholder_issue(en: str, zh: str) -> str | None:
 
 def resource_suffix(platform: str) -> str:
     return ".xml" if platform == "android" else ".strings"
+
+
+def fetch_export(lang: str, platform: str) -> tuple[str, bytes]:
+    """下载语言包某平台的导出文件，返回带版本号的文件名和原始内容；导出无需登录。"""
+    url = f"{SITE}/{lang}/{platform}/export"
+    with urllib.request.urlopen(url, timeout=120) as resp:
+        name = resp.headers.get_filename()
+        if not name:
+            raise SystemExit(f"{url} 没有返回语言包文件，请检查语言包 {lang} 与平台 {platform}。")
+        return name, resp.read()
 
 
 def platform_dirs(platform: str) -> dict[str, pathlib.Path]:

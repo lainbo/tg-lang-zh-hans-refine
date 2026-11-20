@@ -12,7 +12,7 @@
 
 ```mermaid
 flowchart TD
-    Download[浏览器导出官方英文] --> Prepare[prepare_update.py]
+    Download[download.py 下载官方英文] --> Prepare[prepare_update.py]
     Current[本端旧译文与四端精修库] --> Prepare
     Prepare --> History[history/ 归档与来源记录]
     Prepare --> Merged[merged.json 全量当前英文]
@@ -37,7 +37,7 @@ flowchart TD
     Normalize --> Validate[import_from_ai.py 全量校验]
     Validate --> Report[diff_report.py 按变更类型生成报告]
     Validate --> Build[build_strings.py 再次校验后打包]
-    Build --> Upload[人工上传对应平台]
+    Build --> Upload[upload.py 上传并导出核验]
 ```
 
 ## 关键约束

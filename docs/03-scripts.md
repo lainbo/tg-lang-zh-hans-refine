@@ -16,7 +16,10 @@ flowchart LR
     H --> I[import_from_ai]
     I --> J[diff_report]
     J --> K[build_strings]
+    K --> L[upload]
 ```
+
+日常增量从 `download.py` 下载英文、`prepare_update.py` 归档并导出分片开始，之后与上图相同。
 
 ---
 
@@ -34,6 +37,8 @@ flowchart LR
 - `dump_strings(data)` — `dict[str, str]` → `.strings` 文本（按 key 字母序输出）
 - `resource_suffix(platform)` — 安卓返回 `.xml`，其他平台返回 `.strings`
 - `parse_resource(text, platform)` / `dump_resource(data, platform)` — 按平台解析或序列化 XML / `.strings`，保持相同 key→value 结构
+- `SITE` / `CUSTOM_LANG` — `https://translations.telegram.org` 与自定义语言包标识 `zhcn1ainbo`
+- `fetch_export(lang, platform)` — 下载 `SITE/<lang>/<platform>/export`，返回响应头中带版本号的文件名和原始内容；导出无需登录，响应没有文件名（语言包或平台不存在）时退出
 
 **内部：**
 - `_STRING_RE` — Apple `.strings` 字符串正则
@@ -45,6 +50,22 @@ flowchart LR
 - 个别值里还可能出现字面量 `/* */`
 - 因此不能先用全局正则粗暴删注释，否则会误删字符串内容，直接导致 key 数偏少
 - 当前实现使用按字符扫描的 `_strip_comments()`，只在**字符串外部**识别注释
+
+---
+
+## `download.py`
+
+下载官方英文或参考语言包，无需登录。
+
+```bash
+python3 scripts/download.py ios [android macos tdesktop] [--lang en]
+```
+
+- `--lang`：语言包标识，默认 `en`；官方简中为 `zh-hans`。
+- 输出：`~/Downloads/<平台>_<语言包>_v<版本>.strings`（安卓为 `.xml`），文件名取自网站响应头；同名文件直接覆盖。
+- 每个文件先按平台格式解析，为空或无法解析时退出；随后打印路径与 SHA-256。
+- 下载英文时与 `work/<p>/update.json` 的 `sources.en.sha256` 比较：相同提示无需更新，不同则打印对应的 `prepare_update.py` 命令。
+- 下载文件属于下载资源，任务结束按 [清理规则](../AGENTS.md#维护铁律) 删除。
 
 ---
 
@@ -256,4 +277,33 @@ python3 scripts/build_strings.py ios [translated.json]
 
 **保证**：通过 `_common.dump_resource` 选择平台格式并正确转义 `"` `\\` `\n` `\t` `\r`。XML 使用标准库序列化实体与属性。端到端测试验证 `.strings` 与 XML 的解析、构建和再解析结果一致。
 
-**下一步**：将上传文件手动上传至 translations.telegram.org。
+**下一步**：运行 `upload.py` 上传。
+
+---
+
+## `upload.py`
+
+**作用**：把上传文件导入自定义语言包 `zhcn1ainbo` 的对应平台，提交网站识别的修改，再导出核验。
+
+**用法**：
+```bash
+python3 scripts/upload.py ios [--preview]
+```
+
+- 登录态：读取环境变量 `TG_TRANSLATIONS_COOKIE`，未设置时读取项目根目录 `.env` 中的 `TG_TRANSLATIONS_COOKIE=...`（值可加引号）。内容为已登录浏览器请求 translations.telegram.org 时的整段 `Cookie` 请求头。缺失或页面显示未登录时退出并提示。
+- `--preview`：只导入上传文件，打印 `change`（修改）、`add`（新增）、`remove`（删除）、`restore`（恢复）四组数量，不备份也不提交。
+
+**流程**：
+1. 导入 `dist/<p>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`），打印各组数量。
+2. 导出当前线上包并打印版本与 SHA-256；`update.json` 的 `archive` 目录中还没有 `online-before-upload.json` 时，解析后写入作为回滚备份，已有则沿用。
+3. 提交 `change` 组，处理完服务端的分批后重新导入。剩余修改有变化就继续提交，同一批连续两次没有变化时停止。其余三组不提交。
+4. 有新写入时每 30 秒检查一次导出文件名，出现新版本号后核验，最长等待 15 分钟；超时退出，稍后重新运行即可。没有新写入时直接用当前导出核验。
+5. 本轮词条取 `update.json` 的 `added`、`changed`、`reviewed_existing` 与上传文件 key 的交集，输出：与上传文件一致数（其中上传前备份已一致数）、仍不同或未导出数、首次导入识别修改数、保存后导入残留数、本轮以外导出变化数，以及对应的 key 清单。
+
+导出内容只在内存中解析，不写入下载原件；脚本只新增 `online-before-upload.json`。网站返回错误时退出并显示原文，重新运行时沿用已有备份，并以它统计“上传前已一致”。
+
+**接口**（translations.telegram.org 前端使用的未公开接口，网站改版后需重新核对）：
+- 先带 Cookie 请求 `/zhcn1ainbo/<p>/`，从页面 `ajInit({...})` 参数取 `apiUrl`（`/api?hash=...`，hash 与会话绑定）和 `unauth`。
+- `importFile`：multipart 表单，字段 `method`、`lang`、`lang_pack`、`file`。安卓 XML 的文件部分须声明 `Content-Type: text/xml`，声明为 `application/xml` 或 `application/octet-stream` 时返回 `Invalid file format`；`.strings` 用 `application/octet-stream`。返回 `import_id`、`href` 与预览 HTML。预览中 `tr-<组名>-keys-block` 区块内 `tr-plain-key-row` 行的 `data-key` 即该组 key；没有条目的组不输出区块。`data-key` 是网站上的 key 名，复数词条不带后缀（如上传文件的 `Chat.GiftPurchaseOffer.AcceptConfirmation.Text.Stars_any` 在预览中为 `Chat.GiftPurchaseOffer.AcceptConfirmation.Text.Stars`），因此导入残留清单也按这个写法输出。
+- `editImportedKeys`：普通表单，字段 `method`、`lang`、`lang_pack`、`import_id`、`lang_keys`（逗号分隔）、`affected_cnt`。返回的 `repeat_lang_keys` 非空时，连同返回的 `affected_cnt` 继续提交，直到为空；2026-11-20 实测每次处理 50 条。
+- 出错时返回 `{"error": "..."}`：未登录为 `Access denied`，hash 不匹配为 `Bad request`。

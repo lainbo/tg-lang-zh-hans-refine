@@ -12,9 +12,10 @@ Telegram 简体中文语言包精修工具链。以当前官方英文、功能�
 
 ## 日常增量更新
 
-通过已登录的浏览器，在对应平台的官方英文页面导出 `.strings`（安卓导出 `.xml`），详见 [下载指引](docs/SOURCES.md)。将实际下载路径传给以下命令，**保留现有英文基准、译文与成品，交给脚本先备份再替换**：
+用 `download.py` 下载对应平台的官方英文（`.strings`，安卓为 `.xml`），无需登录。文件保存到系统下载目录并保留网站给出的版本号，脚本会提示它是否与上一轮英文相同，详见 [下载指引](docs/SOURCES.md)。有更新时将打印的路径传给 `prepare_update.py`，**保留现有英文基准、译文与成品，交给脚本先备份再替换**：
 
 ```bash
+python3 scripts/download.py ios
 python3 scripts/prepare_update.py ios \
   --en ~/Downloads/ios_en_VERSION.strings
 ```
@@ -49,9 +50,20 @@ python3 scripts/build_strings.py ios
 
 完整成品为 `dist/ios/zh-Hans-custom.strings`，上传文件为 `dist/ios/zh-Hans-custom.upload.strings`，本次审校报告为 `work/ios/update-report.html`，按新增、英文变化和既有修订展示原文及新旧译文。Android、TDesktop 和 macOS 原生客户端使用相同命令，把 `ios` 换为 `android`、`tdesktop` 或 `macos`，并传入对应平台的下载文件。安卓首次源文件为 `data/android/raw/en.xml`，成品为 `dist/android/zh-Hans-custom.xml`。
 
-校验失败会以非零状态退出；合并与打包均在写入前检查。打包完成后，将上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`）人工上传至自定义语言包对应平台，并点击 **EDIT PHRASES** 入库。上传文件只保留中文使用的复数分支，原因见 [上传文件只保留中文使用的复数分支](docs/05-troubleshooting.md#上传文件只保留中文使用的复数分支)。
+校验失败会以非零状态退出；合并与打包均在写入前检查。打包完成后用 `upload.py` 把上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`）导入自定义语言包对应平台并提交。上传文件只保留中文使用的复数分支，原因见 [上传文件只保留中文使用的复数分支](docs/05-troubleshooting.md#上传文件只保留中文使用的复数分支)。
 
-上传可能需要刷新并重复提交几轮。若同一批 key 连续两次重试及导出核验均无进展，应按 [上传停滞与残留判断](docs/05-troubleshooting.md#上传停滞反复提交与停止条件) 核对平台限制，保存差异后停止重复尝试；网站显示 `100%` 仍须导出核验。
+上传需要网站登录态：在已登录 translations.telegram.org 的浏览器开发者工具中，复制任一请求的 `Cookie` 请求头，写入项目根目录 `.env`（已被 Git 忽略）：
+
+```bash
+TG_TRANSLATIONS_COOKIE='复制的 Cookie 请求头'
+```
+
+```bash
+python3 scripts/upload.py ios --preview   # 只看导入识别结果
+python3 scripts/upload.py ios
+```
+
+脚本先把线上包备份到本轮历史归档，再提交网站识别的修改；提交后重新导入，剩余修改仍在减少就继续，同一批连续两次没有变化时停止。随后等待导出出现新版本并逐条核验本轮词条。残留按 [上传停滞与残留判断](docs/05-troubleshooting.md#上传停滞反复提交与停止条件) 核对平台限制。
 
 工作结束后，按 [下载资源清理规则](AGENTS.md#维护铁律) 删除下载原件及项目、历史归档中的复制件，保留解析后的基准、译文、成品和必要备份。没有新内容、没有翻译或没有上传时，同样执行清理。
 

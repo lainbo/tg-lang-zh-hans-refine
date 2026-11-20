@@ -4,9 +4,13 @@
 
 多平台同时更新时，建议按待译规模由小到大**单平台串行**执行（如 `ios` → `tdesktop` → `android` → `macos`）。前序平台合并出新的 `translated.json` 后，下一平台运行导出脚本时会自动把刚产出的译文纳入跨端候选池，避免四端重复新译同一功能。
 
-### 1. 导出官方英文
+### 1. 下载官方英文
 
-在已登录浏览器中，导出 Android、iOS、TDesktop 或 macOS 原生客户端的英文；安卓为 `.xml`，其他平台为 `.strings`，详见 [SOURCES.md](SOURCES.md)。保留下载文件原名，交给下一步记录版本与校验和。
+```bash
+python3 scripts/download.py ios
+```
+
+可一次传入多个平台。脚本把官方英文下载到系统下载目录（安卓为 `.xml`，其他平台为 `.strings`），保留网站给出的带版本号文件名，并与 `update.json` 记录的上一轮英文比较 SHA-256；相同即无需更新，详见 [SOURCES.md](SOURCES.md)。有更新时把打印的路径交给下一步记录版本与校验和。
 
 ### 2. 备份并导出分层紧凑分片
 
@@ -115,15 +119,27 @@ python3 scripts/build_strings.py ios
 
 完整成品为 `dist/ios/zh-Hans-custom.strings`，上传文件为 `dist/ios/zh-Hans-custom.upload.strings`（安卓分别为 `.xml` 与 `.upload.xml`）。本轮报告 `update-report.html` 按新增、英文变化和既有修订分组展示。
 
-### 6. 人工上传
+### 6. 上传与核验
 
-1. 进入自定义语言包对应平台页面，先导出当前线上包，解析为 key/value JSON 保存可回滚备份，并记录导出版本与 SHA-256。
-2. 点击 **Import phrases**，选择打包生成的上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`），详见 [上传文件只保留中文使用的复数分支](05-troubleshooting.md#上传文件只保留中文使用的复数分支)。
-3. 核对识别结果，点击 **EDIT PHRASES → EDIT ALL** 提交，观察剩余数量。
-4. 若保存一部分后停住，刷新页面继续提交；需要重新选文件时，重传同一份上传文件。每轮记录剩余 key，有新增写入就继续。
-5. 同一批 key 连续两次刷新重试均无变化，且重新导出也无新增写入时，停止批量重传，按 [上传停滞与残留判断](05-troubleshooting.md#上传停滞反复提交与停止条件) 核对平台限制。
-6. 导出更新后的线上包，与本地成品逐条对比，保存实际写入数、残留清单和查证依据。网站显示 `100%` 也要完成此核验。
-7. 在客户端打开语言包 Sharing Link 并检查实际显示。
+上传需要网站登录态。在已登录 translations.telegram.org 的浏览器中打开开发者工具的 Network 面板并刷新页面，复制第一条页面请求的 `cookie` 请求头的值，在项目根目录 `.env`（已被 Git 忽略）写成一行：
+
+```bash
+TG_TRANSLATIONS_COOKIE='stel_ssid=…; stel_token=…'
+```
+
+Cookie 包含 `stel_ssid`、`stel_token` 等项，脚本提示登录失效时重新复制。
+
+```bash
+python3 scripts/upload.py ios --preview   # 只导入并显示识别的修改、新增、删除、恢复数量
+python3 scripts/upload.py ios
+```
+
+1. 脚本导入打包生成的上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`），详见 [上传文件只保留中文使用的复数分支](05-troubleshooting.md#上传文件只保留中文使用的复数分支)。先用 `--preview` 核对识别结果；修改数远多于本轮词条时，先检查上传文件的复数分支，不要提交。
+2. 提交前导出当前线上包，保存为本轮历史归档的 `online-before-upload.json`，并打印导出版本与 SHA-256。本轮已有备份时沿用，不覆盖。
+3. 提交网站识别的修改组（对应网页 **EDIT PHRASES → EDIT ALL**），再重新导入同一份文件。剩余修改仍在减少就继续提交；同一批 key 连续两次没有变化时停止，按 [上传停滞与残留判断](05-troubleshooting.md#上传停滞反复提交与停止条件) 核对平台限制。
+4. 有新写入时，脚本等待导出文件名出现新版本号（最长 15 分钟），再按 key 核验本轮词条，输出与上传文件一致、上传前已一致、仍不同或未导出、导入残留及本轮以外导出变化。超时或网站返回错误时脚本停止并显示原因，稍后重新运行即可。
+5. 把脚本输出的版本、SHA-256、核验统计与残留清单写入 [上传记录](05-troubleshooting.md#验收与记录)。
+6. 在客户端打开语言包 Sharing Link 并检查实际显示。
 
 ### 7. 清理下载资源
 

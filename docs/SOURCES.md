@@ -1,6 +1,6 @@
 # 源文件下载指引
 
-日常更新只需要当前平台的官方英文。用户授权时，AI 可以操作已登录的浏览器完成下载。增量更新时暂留下载文件原名，将路径传给 `prepare_update.py`，由脚本先归档旧数据再安装新英文。任务结束后按 [下载资源清理规则](../AGENTS.md#维护铁律) 删除原件及项目、历史归档中的复制件；即使没有内容更新，也要完成清理。
+日常更新只需要当前平台的官方英文，用 `download.py` 下载，无需登录。增量更新时暂留下载文件原名，将路径传给 `prepare_update.py`，由脚本先归档旧数据再安装新英文。任务结束后按 [下载资源清理规则](../AGENTS.md#维护铁律) 删除原件及项目、历史归档中的复制件；即使没有内容更新，也要完成清理。
 
 ## 平台与英文源
 
@@ -11,11 +11,12 @@
 | TDesktop | https://translations.telegram.org/en/tdesktop/ | 独立维护 |
 | macOS 原生客户端 | https://translations.telegram.org/en/macos/ | 独立维护 |
 
-在对应页面登录后，点击 **Export**，下载全部字符串。iOS、TDesktop、macOS 选择 `.strings`，Android 导出 `.xml`。
+`download.py` 请求页面 **Export** 对应的 `<语言包>/<平台>/export` 地址，把导出文件存入系统下载目录，文件名保留网站给出的版本号（如 `ios_en_v22661645.strings`）。iOS、TDesktop、macOS 为 `.strings`，Android 为 `.xml`。脚本按平台格式解析确认后打印路径和 SHA-256，并与 `update.json` 记录的上一轮英文比较；相同即无需更新。
 
 增量更新示例：
 
 ```bash
+python3 scripts/download.py android ios tdesktop macos
 python3 scripts/prepare_update.py android --en ~/Downloads/android_en_VERSION.xml
 python3 scripts/prepare_update.py ios --en ~/Downloads/ios_en_VERSION.strings
 python3 scripts/prepare_update.py tdesktop --en ~/Downloads/tdesktop_en_VERSION.strings
@@ -34,12 +35,11 @@ python3 scripts/prepare_update.py macos --en ~/Downloads/macos_en_VERSION.string
 
 遇到具体疑点时，可先按 key 查阅本地 `data/<platform>/parsed/official-zh.json`、`zhcncc.json` 或 `ref-*.json`。文件可能过时，须结合当前英文核对。
 
-需要最新官方简中时，使用与英文相同的导出方式：
+需要最新官方简中时，指定语言包 `zh-hans` 下载：
 
-- Android：https://translations.telegram.org/zh-hans/android/
-- iOS：https://translations.telegram.org/zh-hans/ios/
-- TDesktop：https://translations.telegram.org/zh-hans/tdesktop/
-- macOS 原生客户端：https://translations.telegram.org/zh-hans/macos/
+```bash
+python3 scripts/download.py ios --lang zh-hans
+```
 
 先备份现有 `parsed/official-zh.json`，再将下载文件暂存为 `data/<platform>/raw/official-zh.strings`（安卓为 `official-zh.xml`）。运行 `parse_strings.py <平台>` 后即可在对应 JSON 中按 key 查阅。它不进入默认待译输入，查阅时在审校备注中记录来源、文件版本、SHA-256、相关 key 和采用依据；任务结束时清理下载原件及 raw 中的副本。
 
@@ -47,4 +47,4 @@ python3 scripts/prepare_update.py macos --en ~/Downloads/macos_en_VERSION.string
 
 ## 上传回写
 
-审校完成并打包后，将上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`）人工上传至自定义语言包的对应平台，核对后点击 **EDIT PHRASES → EDIT ALL** 提交，导出线上结果与本地核对，再在客户端检查实际效果。上传停滞时可刷新重试；固定残留的停止条件与判断依据见 [上传经验](05-troubleshooting.md#上传停滞反复提交与停止条件)，详细步骤见 [操作流程](02-workflow.md)。
+审校完成并打包后，运行 `python3 scripts/upload.py <platform>`，把上传文件 `dist/<platform>/zh-Hans-custom.upload.strings`（安卓为 `.upload.xml`）导入自定义语言包 `zhcn1ainbo` 的对应平台并提交，脚本随后导出线上结果与本地核对；最后在客户端检查实际效果。上传需要在项目根目录 `.env` 写入登录 Cookie，设置方法见 [操作流程](02-workflow.md#6-上传与核验)；固定残留的停止条件与判断依据见 [上传经验](05-troubleshooting.md#上传停滞反复提交与停止条件)。
