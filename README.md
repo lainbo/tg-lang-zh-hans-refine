@@ -19,15 +19,23 @@ python3 scripts/prepare_update.py ios \
   --en ~/Downloads/ios_en_VERSION.strings
 ```
 
-脚本会把上一轮源文件、中间产物与成品归档到 `work/ios/history/<时间>/`，保存来源文件名和 SHA-256，比较新旧英文。新增与英文变化的条目只携带当前及变化前英文，写入 `to-translate.partNN.json`；其余已校验译文保留在 `translated.reused.json`。旧英文与精修译文另存为 `translation-memory.json`。每片默认 100 条。
+脚本会把上一轮源文件、中间产物与成品归档到 `work/ios/history/<时间>/`，保存来源文件名和 SHA-256，比较新旧英文，并自动完成**复数折叠、同英文聚合、四端精修候选预注入（精确匹配、占位符安全投影与大小写不敏感提示）、变更词条旧译注入、同模块邻居 `context` 注入与复杂度分层切片**（常规片 `fast` 默认 ≤350 组，疑难片 `deep` 默认 ≤120 组），输出 `compact.partNN.json`、`compact.partNN.meta.json` 与 `compact-manifest.json`。其余未变译文保留在 `translated.reused.json`，旧英文与精修译文另存为 `translation-memory.json`。多平台同时更新时建议按规模由小到大串行执行，前序平台产出的新译文会自动进入后续平台的候选池。
 
-翻译 AI 阅读 `work/ios/PROMPT.md`，先根据英文和上下文确定含义，核对精修记忆并复用适用译文，完成其余翻译，随后单独复核语义、格式与跨平台一致性。逐片输出 `translated.partNN.json`，在 `review.md` 记录实际复核范围和疑点处理。每片完成后校验：
+翻译 AI 按分片派发独立子代理：首轮并行读取对应档位的 `PROMPT.fast.md` 或 `PROMPT.deep.md` 与 `compact.partNN.json`，结合片内上下文直接输出短编号 JSON `reply.partNN.json`（确认候选写 `"="` / `"=1"`，微调沿用旧译写 `"=prev"`，独立新译写 `"译文"`，同英文组存在语境分歧时按 key 覆写）。每片完成后展开并校验：
 
 ```bash
 python3 scripts/import_from_ai.py ios --part 1
 ```
 
-全部审校完成后：
+初译全部通过后，导出并执行带本地规则预检的差量二审（常规片精确复用且无预检提示的词条自动豁免，二审仅输出需修改的编号补丁，整片无修改输出 `{}`）：
+
+```bash
+python3 scripts/export_for_ai.py ios --review
+# 独立复核子代理按 review.partNN.json 写出 review-patch.partNN.json 后：
+python3 scripts/import_from_ai.py ios --review
+```
+
+在 `work/ios/review.md` 记录复核范围与疑点决策后，合并、规范化并打包：
 
 ```bash
 python3 scripts/merge_parts.py ios
@@ -49,7 +57,7 @@ python3 scripts/build_strings.py ios
 
 ## 从零初始化与文档
 
-首次准备英文源文件后，依次运行 `parse_strings.py`、`merge.py`、`export_for_ai.py --chunk 100`，然后逐片审校。完整步骤见 [操作流程](docs/02-workflow.md)。
+首次准备英文源文件后，依次运行 `parse_strings.py`、`merge.py`、`export_for_ai.py`，然后按紧凑分片完成初译与差量二审。完整步骤见 [操作流程](docs/02-workflow.md)。
 
 - [架构与设计原则](docs/01-architecture.md)
 - [脚本参数](docs/03-scripts.md)

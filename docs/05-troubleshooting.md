@@ -266,36 +266,37 @@ Android 和 iOS 的残留清单经过两次刷新重试均未改变。TDesktop �
 
 ---
 
-## AI 跳片（连续缺失）
+## AI 跳片或半截旧分片续跑
 
-**现象**：翻译 AI 跑了 30 片，但中间连续缺 5-6 片（比如 part11~15）。
+**现象 1**：分片跑了一部分中断，缺少若干 `translated.partNN.json`。
 
-**原因**：AI 对话上下文过长导致中段"失忆"，或批处理时跳过了一段。
+**处理**：
+- 若工作区已是紧凑分片（存在 `compact.partNN.json`），仅为缺失的分片单独启动一次性子代理写出 `reply.partNN.json`，再运行：
+  ```bash
+  python3 scripts/import_from_ai.py ios --part 11
+  ```
+- 若工作区保留了部分旧版分片（无 `compact.part*.json`），运行：
+  ```bash
+  python3 scripts/export_for_ai.py ios --repack
+  ```
+  脚本会先校验并合并已完成分片保留为 `part01`，再将剩余未译条目重切为紧凑分级分片 `part02..partNN`。
 
-**处理**：对着缺失的 partNN 单独重跑：
-```bash
-# 让 AI 重读对应 to-translate.partNN.json, 回填 translated.partNN.json
-# 然后单片校验
-python3 scripts/import_from_ai.py ios --part 11
-```
-
-**预防**：AI 跑到第 10 片开始格式不稳时，重开一个会话重新贴 PROMPT.md。
+**预防**：严格按“每片一个独立一次性子代理”派发，不在同一长会话中连续处理多个分片。
 
 ---
 
 ## 占位符误伤
 
-**现象**：`import_from_ai.py` 报 `placeholder_mismatch`。
+**现象**：`import_from_ai.py` 报 `placeholder_mismatch` 或 `placeholder_order_mismatch`。
 
 **常见原因**：
 - AI 把 `%@` 翻译成了中文（如 "用户"）
-- 占位符 `%1$@` 和 `%2$@` 顺序调换但数量没变（这个其实不报错，因为 sorted 后一致）
-- 占位符出现次数变了（如 `{bot}` 用了两次超出原文）
+- 无编号百分号占位符（如两个 `%@`）调换了次序
+- 占位符出现次数变化（如 `{bot}` 用了两次超出原文）
 
 **修法**：
-1. 看 `validation.json` 里的 `en_placeholders` 和 `zh_placeholders` diff
-2. 手动修正对应 `translated.partNN.json` 的 `final` 字段
-3. 重跑 `import_from_ai.py ios --part N` 验证
+1. 查看 `validation.partNN.json`（或全量 `validation.json`）中的 `en_placeholders` 与 `zh_placeholders` 差异
+2. 单片阶段修正对应 `reply.partNN.json` 中的短编号译文，重跑 `python3 scripts/import_from_ai.py ios --part N` 重新展开验证；合并后阶段直接修正 `translated.json` 并重跑 `python3 scripts/import_from_ai.py ios`
 
 ---
 
@@ -342,7 +343,7 @@ python3 scripts/normalize.py ios
 ```bash
 python3 scripts/parse_strings.py tdesktop
 python3 scripts/merge.py tdesktop
-python3 scripts/export_for_ai.py tdesktop --chunk 100
+python3 scripts/export_for_ai.py tdesktop
 ```
 
 **如果旧翻译已经做了很多，不要推倒重来：**
@@ -355,36 +356,22 @@ python3 scripts/export_for_ai.py tdesktop --chunk 100
 
 ## 向 AI 提供任务的两种模式
 
-### 模式 A：AI 有文件系统权限（另一个 Claude Code / Cursor / Cline）
+### 模式 A：AI 有文件系统权限（Claude Code / Codex / Pi / Cursor）
 
-最省事。贴这段启动：
+直接让 AI 读取仓库根目录的 `AGENTS.md` 按标准流程执行：
 
 ```
-我在当前目录跑 Telegram 简中语言包精修任务, 你负责翻译审校。
-1. 先读 work/ios/PROMPT.md，按英文、上下文与共用术语逐片初译
-2. 读取 work/ios/to-translate.part01.json ~ partNN.json；相关英文可在 merged.json 中检索
-3. 初译后按相关 key 查 translation-memory.json 核对精修表达；参考包只在具体疑点需要时查阅
-4. 单独再做语义与一致性复核，输出对应 translated.partNN.json，并在 review.md 记录实际复核范围及疑点处理
-5. 每片完成后运行 python3 scripts/import_from_ai.py ios --part N；结构校验与语义复核都完成后再汇报
+请按 AGENTS.md 的《分层增量审校标准流程》完成 ios 语言包更新：
+1. 若尚未生成紧凑分片，运行 export_for_ai.py ios（有半截旧分片时加 --repack），读取 work/ios/compact-manifest.json
+2. 对每个待译 compact.partNN.json 派发独立子代理：首轮并行读取对应的 PROMPT.fast.md 或 PROMPT.deep.md 与该紧凑分片（不读 .meta.json，不检索外部大文件），直接写出 reply.partNN.json，随后运行 import_from_ai.py ios --part N 展开校验
+3. 初译全部通过后运行 export_for_ai.py ios --review，按 review.partNN.json 派发独立复核子代理并行读取 PROMPT.review.md 与复核分片，重点核查带 flags 项并输出差量补丁 review-patch.partNN.json（无修改输出 {}），运行 import_from_ai.py ios --review 应用补丁并更新 review.md
+4. 依次完成 merge_parts.py、normalize.py、import_from_ai.py、diff_report.py --update 与 build_strings.py
 ```
 
 ### 模式 B：AI 只有聊天界面
 
-**开场**：贴 `PROMPT.md` 全文 + 下面这段：
-```
-接下来按实际分片数分批发 JSON 分片 part01 ~ partNN, 每批默认 100 条。
-先根据英文和上下文初译，需要相关英文时说明具体 key 或功能。
-初译后我再按需提供精修记忆、功能资料或参考译文；完成语义与一致性复核后输出纯 JSON。
-顶层 key 与该分片完全一致，不要 markdown 代码块包裹。
-```
-
-**每批**：
-```
-part01:
-<粘贴 to-translate.part01.json 全文>
-```
-
-AI 回复保存为 `work/ios/translated.part01.json`（去掉首尾可能的 ```json 代码块），另行索取实际复核记录并保存到 `work/ios/review.md`。聊天模式按疑点提供相关资料，不必预先粘贴所有参考包。
+1. **初译每批**：每次新开干净对话，按分片顶层 `tier` 贴入 `PROMPT.fast.md` 或 `PROMPT.deep.md` 全文，随后贴入 `compact.partNN.json` 全文。将 AI 返回的纯 JSON 保存为 `work/ios/reply.partNN.json`，运行 `python3 scripts/import_from_ai.py ios --part N`。
+2. **差量二审**：运行 `python3 scripts/export_for_ai.py ios --review`。新开干净对话贴入 `PROMPT.review.md` 与 `review.partNN.json`，将返回的差量补丁 JSON（无修改为 `{}`）保存为 `work/ios/review-patch.partNN.json`，运行 `python3 scripts/import_from_ai.py ios --review`，并将复核说明写入 `work/ios/review.md`。
 
 ---
 

@@ -16,8 +16,8 @@ from merge import main as merge
 from parse_strings import main as parse
 
 
-def main(platform: str, en_path: Path, chunk: int) -> None:
-    if chunk <= 0:
+def main(platform: str, en_path: Path, chunk: int | None = None) -> None:
+    if chunk is not None and chunk <= 0:
         raise SystemExit("--chunk 必须为正整数")
     dirs = platform_dirs(platform)
     work = dirs["work"]
@@ -78,6 +78,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("platform", choices=PLATFORMS)
     parser.add_argument("--en", type=Path, required=True)
-    parser.add_argument("--chunk", type=int, default=100)
+    parser.add_argument("--chunk", type=int, default=None, help="可选：覆盖默认分层切片上限（默认 fast=350, deep=120）")
     args = parser.parse_args()
     main(args.platform, args.en, args.chunk)

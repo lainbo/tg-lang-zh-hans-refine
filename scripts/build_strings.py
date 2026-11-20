@@ -9,16 +9,11 @@ from __future__ import annotations
 import json
 import sys
 
-from _common import dump_resource, platform_dirs, resource_suffix
+from _common import PLURAL_SUFFIXES, dump_resource, platform_dirs, resource_suffix
 from import_from_ai import validate
 
 # 网站上的简中语言包每个复数词条只启用一个分支；上传文件含其余分支时，导入会清空已启用分支的线上译文。
-UPLOAD_PLURAL = {
-    "android": ("_other", ("_zero", "_one", "_two", "_few", "_many")),
-    "macos": ("_other", ("_zero", "_one", "_two", "_few", "_many")),
-    "ios": ("_any", ("_0", "_1", "_2", "_3_10", "_many")),
-    "tdesktop": ("#other", ("#zero", "#one", "#two", "#few", "#many")),
-}
+UPLOAD_PLURAL = PLURAL_SUFFIXES
 # 网页按复数词条编辑这个 key，同名的无后缀旧句与之冲突。
 UPLOAD_EXCLUDE = {"macos": {"Star.Auction.Preview.TopBidders"}}
 

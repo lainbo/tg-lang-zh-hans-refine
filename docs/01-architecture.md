@@ -2,51 +2,60 @@
 
 ## 质量与职责
 
-当前官方英文决定语义，功能上下文帮助消除歧义，共用术语表约束表达。翻译 AI 先理解原文，核对精修记忆并复用适用译文，完成其余翻译后单独复核语义与一致性，遵循 [审校规范](06-translation-style.md)。脚本只做结构化 I/O、差异检测、校验和打包。
+当前官方英文决定语义，功能上下文帮助消除歧义，共用术语表约束表达。本地脚本负责复数折叠、同英文聚合、跨端精修候选匹配、同模块上下文预注入、静态预检、结构校验与打包；翻译 AI 在独立干净的子会话中依据预注入上下文核对复用或完成翻译，再通过差量二审单独复核语义与一致性，遵循 [审校规范](06-translation-style.md)。
 
-官方简中和社区包以解析后的 JSON 保留在本地，遇到具体疑点时按 key 查阅；默认待译输入只包含当前英文及发生变化时的旧英文。参考译文可能有误，功能判断优先依据界面、同功能文案和官方客户端源码。
+官方简中和社区包以解析后的 JSON 保留在本地，仅在预注入上下文仍无法消解具体疑点时按 key 定向查阅。参考译文可能有误，功能判断优先依据界面、同功能文案和官方客户端源码。
 
-当前精修包是项目自己的翻译记忆。英文未变时默认复用已通过结构校验的译文；发现语义错误、上下文变化或术语冲突时定向审校。模型升级后仍执行相同质量标准，按实际问题决定修订范围，避免无依据的表达漂移。
+当前四端精修主文件共同构成项目的翻译记忆。英文未变时默认复用已通过结构校验的译文；新增或变更词条导出时，脚本自动按精确英文、占位符安全双射投影与大小写不敏感匹配检索四端精修候选，并校验占位符兼容性。发现语义错误、上下文变化或术语冲突时定向审校。模型升级后仍执行相同质量标准，按实际问题决定修订范围。
 
 ## 增量数据流
 
 ```mermaid
 flowchart TD
     Download[浏览器导出官方英文] --> Prepare[prepare_update.py]
-    Current[上一轮英文与最终译文] --> Prepare
+    Current[本端旧译文与四端精修库] --> Prepare
     Prepare --> History[history/ 归档与来源记录]
     Prepare --> Merged[merged.json 全量当前英文]
-    Prepare --> Input[to-translate.partNN.json 待审校英文]
-    Prepare --> Memory[translation-memory.json 旧英文与精修译文]
     Prepare --> Reused[translated.reused.json 未变译文]
-    Style[共用术语与功能上下文] --> Draft[理解原文、核对复用与翻译]
-    Input --> Draft
-    Draft --> Review[对照英文复核语义与一致性]
-    Memory -.按相关 key 核对.-> Draft
-    Reference[官方简中及社区包] -.具体疑点按需查阅.-> Review
-    Review --> Parts[translated.partNN.json 与 review.md]
-    Parts --> Merge[merge_parts.py 校验后合并]
+    Prepare --> Memory[translation-memory.json 旧英文与精修译文]
+    Prepare --> Compact[compact.partNN.json 复数折叠+同英文聚合+候选/邻居预注入+fast/deep分层]
+    Style[PROMPT.fast.md / PROMPT.deep.md] --> Subagent[独立子代理初译]
+    Compact --> Subagent
+    Subagent --> Reply[reply.partNN.json 短编号回传]
+    Reply --> Expand[import_from_ai.py --part N 展开并校验]
+    Expand --> TransPart[translated.partNN.json]
+    TransPart --> ExportRev[export_for_ai.py --review 静态预检并豁免无风险精确复用项]
+    ExportRev --> RevPack[review.partNN.json + PROMPT.review.md]
+    RevPack --> RevAgent[独立子代理差量二审]
+    RevAgent --> Patch[review-patch.partNN.json 仅输出修改项]
+    Patch --> ApplyRev[import_from_ai.py --review 基于初译快照幂等应用补丁]
+    ApplyRev --> PartsOK[已复核 translated.partNN.json + review.md]
+    PartsOK --> Merge[merge_parts.py 门禁检查后合并]
     Reused --> Merge
     Merge --> Final[translated.json]
     Final --> Normalize[normalize.py 预览与备份后应用]
-    Normalize --> Validate[import_from_ai.py]
-    Validate --> Report[按变更类型展示审核报告]
+    Normalize --> Validate[import_from_ai.py 全量校验]
+    Validate --> Report[diff_report.py 按变更类型生成报告]
     Validate --> Build[build_strings.py 再次校验后打包]
     Build --> Upload[人工上传对应平台]
 ```
 
 ## 关键约束
 
-- 以旧 `merged.json` 和对应 `translated.json` 比较新英文。同 key 英文变化必须审校；新一轮仅需下载英文。
-- 更新前归档现有 raw、parsed、work 文件和 dist；任务结束后按 [下载资源清理规则](../AGENTS.md#维护铁律) 删除下载原件及归档中的复制件。英文基准与参考数据以解析后的 JSON 保留，供增量维护和按需检索。
-- `translation-memory.json` 将旧英文与旧精修译文成对保存。查看旧译时必须同时看它对应的英文，不能将旧含义套用到新原文。
-- 默认每片 100 条。分片是存储边界，同功能文案和复数分支需要跨片核对。
+- 以旧 `merged.json` 和对应 `translated.json` 比较新英文。同 key 英文变化必须审校；新一轮仅需下载官方英文。
+- 更新前归档现有 raw、parsed、work 文件和 dist；任务结束后按 [下载资源清理规则](../AGENTS.md#维护铁律) 删除下载原件及归档中的复制件。英文基准与参考数据以解析后的 JSON 保留。
+- **脚本预处理与职责边界**：
+  - 同词根且占位符签名与变更状态一致的复数分支合并为 1 条导出，共享同一英文的多个 key 自动聚合审阅（支持按 key 覆写语境差异），回传后自动展开回全部原始 key 并逐 key 校验占位符。
+  - 原文变化（`changed`）条目同时携带旧英文 `p_en` 与上一轮精修中文 `p_zh`。
+  - 跨平台候选匹配支持精确英文、占位符严格双射安全投影（禁止静默参数换序，且投影结果须通过目标占位符门禁）与大小写不敏感提示（标记 `[ci|...]`）。
+  - 分片头部按功能前缀去重附带本平台已译邻居（`context`），脚本展开与路由元数据独立写入 `.meta.json`，确保 AI 输入聚焦于语义判断。
+- **复杂度分层与可回滚差量二审**：
+  - 按词条复杂度切分为常规片（`fast`，默认上限 350 组，配精简任务头）与疑难片（`deep`，默认上限 120 组，配完整审校合约）；总组数不超过 `deep` 上限时合并为单片处理。
+  - 每个分片由独立干净的子代理处理，保持上下文清晰、避免跨分片干扰；宿主不支持调节思考档位时，全程使用选定的同一主力模型即可。
+  - 二审导出前留存不可变初译快照 `translated-draft.partNN.json`，并对术语、称呼/省略号、首尾空白、长度比例及本端同英文多译差异执行静态预检（附 `flags` 置顶提示）。常规片中精确采用四端候选且无预检提示的词条免除二审；其余词条进入 `review.partNN.json`（默认上限 350 组），二审仅输出需要修改的编号补丁（整片无修改输出 `{}`）。补丁始终基于初译快照幂等重放，删改补丁可完整回退；合并前由 `merge_parts.py` 强制核对二审完成状态与文件时效。
 - `translated.json` 是合并后规范化、人工修订与打包的唯一主文件。分片保留审校交付记录；合并后修改主文件，不重新合并旧片。
-- 结构、key 覆盖和占位符校验通过，才能合并与打包。机器校验不证明语义质量，实际复核范围与疑点处理记录在 `review.md`。
-- 审核报告按文案变更类型组织；`source` 仅保留实际来源，所有本轮条目都需审校。
-- Android、iOS、TDesktop 和 macOS 原生客户端各自维护 key 集合，共用术语表。跨平台可复用已核对英文、功能用途、参数角色和格式的精修译文。
-- 纯 Python 标准库；翻译 AI 可在当前工作区中审校，脚本不接入翻译服务。
-- 最终上传保持人工操作。解析数据和产物被 Git 忽略，历史归档保存在本机；下载资源仅在工作期间暂存。
+- 结构、key 覆盖和占位符校验通过，才能合并与打包。机器校验之外的语义复核范围与疑点处理记录在 `review.md`。
+- Android、iOS、TDesktop 和 macOS 原生客户端各自维护 key 集合，共用术语表，单平台串行更新时前序平台的新译文自动进入后续平台候选池。
 
 ## 平台资源格式
 

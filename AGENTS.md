@@ -36,14 +36,14 @@ tg-lang-refine/
 │   ├── 06-translation-style.md 共用术语与信达雅审校规范
 │   └── SOURCES.md            英文下载与参考查阅指引
 ├── scripts/                  Python 脚本 (零外部依赖)
-│   ├── _common.py               .strings / XML 解析与序列化 + 路径约定
-│   ├── prepare_update.py        备份旧轮次并准备增量审校
+│   ├── _common.py               .strings / XML 解析、占位符校验与复数约定
+│   ├── prepare_update.py        备份旧轮次并导出紧凑增量包
 │   ├── parse_strings.py         平台资源 → JSON
 │   ├── merge.py                 建立全量英文基准 → merged.json
 │   ├── seed_ios_ref.py          按英文匹配 iOS 精修参考译文
-│   ├── export_for_ai.py         merged.json → 翻译 AI 输入 (分片)
-│   ├── import_from_ai.py        校验 AI 回传 (全量 / 单片)
-│   ├── merge_parts.py           本轮分片 + 未变译文 → translated.json
+│   ├── export_for_ai.py         导出分级紧凑分片与二审差量复核包
+│   ├── import_from_ai.py        展开紧凑回传、应用二审补丁并校验
+│   ├── merge_parts.py           门禁检查后合并分片与未变译文 → translated.json
 │   ├── normalize.py             风格统一 (您→你, ...→…)
 │   ├── diff_report.py           审核用 HTML 报告
 │   └── build_strings.py         translated.json → .strings / XML
@@ -51,16 +51,24 @@ tg-lang-refine/
 │   ├── raw/                  下载资源临时目录 (.strings / .xml，用后清理)
 │   └── parsed/               解析后 JSON (gitignore)
 ├── work/<platform>/          工作区 (gitignore)
-│   ├── history/ + update.json # 历史归档和来源记录
-│   ├── translated.reused.json # 原文未变译文
-│   ├── translation-memory.json # 旧英文与精修译文配对
-│   ├── merged.json
-│   ├── to-translate.json + to-translate.partNN.json
-│   ├── translated.partNN.json
-│   ├── translated.json + translated.json.bak
-│   ├── validation.json
+│   ├── history/ + update.json       # 历史归档和来源记录
+│   ├── translated.reused.json       # 原文未变译文
+│   ├── translation-memory.json      # 旧英文与精修译文配对
+│   ├── merged.json                  # 当前全量英文基准
+│   ├── to-translate.json + .partNN  # 待审校原始 key 账本与分片基准
+│   ├── compact-manifest.json        # 分层分片派发清单
+│   ├── PROMPT.{md,fast.md,deep.md,review.md} # 分层初译与二审合约
+│   ├── compact.partNN.json + .meta.json      # 紧凑输入包与脚本展开元数据
+│   ├── reply.partNN.json            # AI 短编号回传
+│   ├── review.partNN.json + .meta.json       # 待二审复核包与脚本映射元数据
+│   ├── review-patch.partNN.json     # AI 二审差量修改补丁
+│   ├── review-plan.json + review-summary.json # 二审计划与复核统计
+│   ├── translated-draft.partNN.json # 二审前不可变初译快照
+│   ├── translated.partNN.json       # 展开并复核后的标准译文分片
+│   ├── translated.json + .bak       # 合并后的唯一主文件与备份
+│   ├── validation.json + .partNN    # 全量与单片结构校验报告
 │   ├── normalize-report.md
-│   ├── review.md              # 语义与一致性复核记录
+│   ├── review.md                    # 语义与一致性复核记录
 │   └── report.html + update-report.html
 └── dist/<platform>/          完整成品与上传文件 .strings / .xml (gitignore)
 ```
@@ -84,6 +92,31 @@ tg-lang-refine/
 
 ---
 
+## 分层增量审校标准流程（翻译 AI 执行必读）
+
+进入本项目执行语言包更新的 AI 必须遵循以下分层流水线，将检索、去重、折叠、预检与展开交给本地脚本，AI 专注语义与语境判断：
+
+1. **单平台串行更新**：每次处理单个平台。多平台同时有更新时，优先完成待译量小或核心平台（如 `ios` → `tdesktop` → `android` → `macos`）；前序平台合并生成 `translated.json` 后，下一平台的导出脚本会自动将其最新译文纳入跨端候选池。
+2. **准备分层紧凑分片**：
+   - 导入新下载英文源：`python3 scripts/prepare_update.py <platform> --en <下载文件路径>`
+   - 工作区已有待译 `to-translate.json` 且尚无已译分片：`python3 scripts/export_for_ai.py <platform>`
+   - 工作区已有部分校验通过的旧分片需续跑：`python3 scripts/export_for_ai.py <platform> --repack`
+   - 脚本自动折叠复数分支、聚合相同英文词条、预注入四端精修候选（精确匹配、占位符安全投影与大小写不敏感提示）、附上变化条目的 `p_en`/`p_zh` 与同模块邻居 `context`，并按复杂度切分为 `fast`（常规片，默认 ≤350 组）和 `deep`（疑难片，默认 ≤120 组）两档 `compact.partNN.json`（脚本展开所需的映射元数据存放在同目录 `.meta.json`，AI 无需读取）。
+3. **独立子会话初译与单片展开校验**：
+   - 主会话仅读取 `work/<p>/compact-manifest.json` 调度任务，不在长会话中连续处理大量分片，也不通读 `merged.json`、`translation-memory.json` 等大文件。
+   - 每个待译分片派发一个独立干净的子代理：首轮并行读取对应档位的 `work/<p>/PROMPT.fast.md` 或 `PROMPT.deep.md` 以及 `work/<p>/compact.partNN.json`，随后直接写出 `work/<p>/reply.partNN.json`。仅当 `deep` 片内上下文仍无法消解具体功能歧义时，才定向查阅最小必要上下文。
+   - 模型与思考档位：全程使用用户选定的同一主力模型。宿主子代理支持调节思考强度时，`fast` 片设为低/中档、`deep` 片设为高档；宿主不支持调节思考强度时，直接用该模型派发全部子代理。
+   - `reply.partNN.json` 短编号取值：`"="` 或 `"=1"`（确认采用对应候选 `c`）、`"=prev"`（微调词条沿用 `p_zh`）、`"译文"`（独立新译，默认 `fresh`）、`["译文", "rewrite_ref", "来源与理由"]`（改写或附备注）；同英文多 key 组存在语境差异时支持对象覆写 `{"*": "默认译文", "特殊Key": "特殊译文"}`。
+   - 每片完成后运行 `python3 scripts/import_from_ai.py <platform> --part N`，展开写出标准 `translated.partNN.json` 并确保校验 0 问题。
+4. **本地静态预检与差量二审（只输出修改补丁）**：
+   - 初译全部通过后，运行 `python3 scripts/export_for_ai.py <platform> --review`。脚本先留存不可变初译快照 `translated-draft.partNN.json`，并对术语、称呼/省略号、首尾空白、长度比例及本端同英文多译差异做静态预检（命中项附 `flags` 置顶展示）。常规片中精确采用四端候选且无风险标记的词条自动免除二审，其余词条导出为 `review.partNN.json`（默认 ≤350 组/片）。
+   - 按二审分片派发独立复核子代理：首轮并行读取 `work/<p>/PROMPT.review.md` 与 `work/<p>/review.partNN.json`（不读 `.meta.json`）。确认无误的词条省略不写，整片无修改直接输出 `{}`；仅将需修正条目按 `Rxxx` 写入 `work/<p>/review-patch.partNN.json`（多 key 组支持按 key 局部修正）。
+   - 运行 `python3 scripts/import_from_ai.py <platform> --review` 基于初译快照幂等应用补丁并生成 `review-summary.json`，再将实际复核统计、术语决策与疑点依据写入 `work/<p>/review.md`。
+5. **合并、规范化与打包**：
+   依次运行 `merge_parts.py` → `normalize.py`（核对 `normalize-report.md` 无误后加 `--apply`）→ `import_from_ai.py` → `diff_report.py --update` → `build_strings.py`，任务结束按铁律清理下载原件。
+
+---
+
 ## 维护铁律
 
 1. **零外部依赖**：所有脚本仅用 Python 标准库，`python3` 直接跑。新增脚本**禁止** `pip install`。
@@ -102,7 +135,7 @@ tg-lang-refine/
 
 - **新增平台支持（如其他客户端）** → 扩展 `_common.py:PLATFORMS`，同格式脚本自动适配；新文件格式须同步解析、构建与增量入口
 - **新增 normalize 规则** → 改 `normalize.py:normalize()`，先 dry-run 评估规模
-- **AI 输出格式变更** → 改 `export_for_ai.py:PROMPT_TEMPLATE` + `import_from_ai.py:VALID_SOURCES`
-- **查阅参考译文** → 在 `translation-memory.json` 或 `data/<p>/parsed/` 按相关 key 检索，记录依据；默认输入保持英文
+- **AI 输出格式变更** → 改 `export_for_ai.py` 的 `PROMPT_*` 模板 + `import_from_ai.py` 的 `expand_compact()` / `VALID_SOURCES`
+- **查阅参考译文** → 优先使用 `compact.partNN.json` 预注入的 `c`、`p_zh` 和 `context`；仅在具体功能疑点未消解时按 key 定向查 `data/<p>/parsed/` 并记录依据
 
 更详细的"怎么改"请进 `docs/03-scripts.md` 对应章节。

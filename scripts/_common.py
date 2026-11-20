@@ -7,6 +7,37 @@ import xml.etree.ElementTree as ET
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PLATFORMS = ("ios", "macos", "tdesktop", "android")
 
+# 各平台复数后缀：(中文上传保留分支, 其余复数分支)
+PLURAL_SUFFIXES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "android": ("_other", ("_zero", "_one", "_two", "_few", "_many")),
+    "macos": ("_other", ("_zero", "_one", "_two", "_few", "_many")),
+    "ios": ("_any", ("_0", "_1", "_2", "_3_10", "_many")),
+    "tdesktop": ("#other", ("#zero", "#one", "#two", "#few", "#many")),
+}
+
+# 占位符: Apple %@ / %1$@ / %d / %1$d / %s / %1$s / %1$.2f, {xxx}, 安卓 un1 / **oo** 等
+PLACEHOLDER_RE = re.compile(r"%%|%(?:\d+\$)?\d*(?:\.\d+)?[@dsif]|\{[^{}]+\}|\bun\d+\b|\*\*oo\*\*")
+
+
+def extract_placeholders(s: str) -> list[str]:
+    return PLACEHOLDER_RE.findall(s)
+
+
+def placeholders(s: str) -> list[str]:
+    return sorted(extract_placeholders(s))
+
+
+def unnumbered_percent_placeholders(s: str) -> list[str]:
+    return [p for p in extract_placeholders(s) if p.startswith("%") and p != "%%" and "$" not in p]
+
+
+def placeholder_issue(en: str, zh: str) -> str | None:
+    if placeholders(en) != placeholders(zh):
+        return "placeholder_mismatch"
+    if unnumbered_percent_placeholders(en) != unnumbered_percent_placeholders(zh):
+        return "placeholder_order_mismatch"
+    return None
+
 
 def resource_suffix(platform: str) -> str:
     return ".xml" if platform == "android" else ".strings"
